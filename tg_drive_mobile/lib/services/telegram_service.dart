@@ -18,6 +18,9 @@ class TelegramService extends ChangeNotifier {
   TdlibIsolate? _tdlib;
   bool _initialized = false;
 
+  String _authState = 'initializing';
+  String get authState => _authState;
+
   AuthStep _currentStep = AuthStep.initializing;
   AuthStep get currentStep => _currentStep;
 
@@ -26,6 +29,8 @@ class TelegramService extends ChangeNotifier {
 
   String? _hint;
   String? get hint => _hint;
+
+  String? _dbPath;
 
   bool _loading = false;
   bool get loading => _loading;
@@ -66,6 +71,7 @@ class TelegramService extends ChangeNotifier {
   Future<void> initialize() async {
     if (_initialized) return;
     _currentStep = AuthStep.initializing;
+    _authState = 'initializing';
     _loading = true;
     notifyListeners();
 
@@ -78,6 +84,7 @@ class TelegramService extends ChangeNotifier {
 
       final dir = await getApplicationDocumentsDirectory();
       final dbPath = '${dir.path}/tdlib';
+      _dbPath = dbPath;
       await Directory(dbPath).create(recursive: true);
 
       _tdlib = TdlibIsolate();
@@ -88,6 +95,7 @@ class TelegramService extends ChangeNotifier {
         _error = 'Missing API credentials. Build with --dart-define=API_ID=... --dart-define=API_HASH=...';
         _loading = false;
         _currentStep = AuthStep.phone;
+        _authState = 'waitPhone';
         notifyListeners();
         return;
       }
@@ -122,6 +130,7 @@ class TelegramService extends ChangeNotifier {
       _error = 'Init failed: $e';
       _loading = false;
       _currentStep = AuthStep.phone;
+      _authState = 'waitPhone';
       notifyListeners();
     }
   }
@@ -130,10 +139,10 @@ class TelegramService extends ChangeNotifier {
 
   void _resetLoadingAfterTimeout() {
     _loadingTimer?.cancel();
-    _loadingTimer = Timer(const Duration(seconds: 20), () {
+    _loadingTimer = Timer(const Duration(seconds: 15), () {
       if (_loading) {
         _loading = false;
-        _error = 'No response from Telegram. Check your connection and try again.';
+        _error = 'Connection timeout. Check your internet and try again.';
         notifyListeners();
       }
     });
@@ -144,8 +153,10 @@ class TelegramService extends ChangeNotifier {
     _error = null;
     _resetLoadingAfterTimeout();
     notifyListeners();
+    final normalized = phone.startsWith('+') ? phone : '+$phone';
+    debugPrint('Sending code to: $normalized');
     _sendRequest('setAuthenticationPhoneNumber', {
-      'phone_number': phone,
+      'phone_number': normalized,
       'settings': {
         '@type': 'phoneNumberAuthenticationSettings',
         'allow_flash_call': false,
@@ -255,6 +266,21 @@ class TelegramService extends ChangeNotifier {
       return;
     }
 
+    // Handle auth states that handy_tdlib 2.3.10 doesn't have typed classes for
+    if (type == 'updateAuthorizationState') {
+      final authStateRaw = json['authorization_state'] as Map<String, dynamic>?;
+      if (authStateRaw != null) {
+        switch (authStateRaw['@type'] as String?) {
+          case 'authorizationStateWaitEncryptionKey':
+            _sendJson({
+              '@type': 'checkDatabaseEncryptionKey',
+              'encryption_key': '',
+            });
+            return;
+        }
+      }
+    }
+
     try {
       final object = convertJsonToObject(jsonEncode(json));
 
@@ -329,6 +355,7 @@ class TelegramService extends ChangeNotifier {
           _error = message;
         } else if (message.contains('ALREADY_LOGGED_IN')) {
           _currentStep = AuthStep.ready;
+          _authState = 'ready';
           _loading = false;
           notifyListeners();
           return;
@@ -353,15 +380,33 @@ class TelegramService extends ChangeNotifier {
     _loadingTimer?.cancel();
     switch (state) {
       case AuthorizationStateWaitTdlibParameters():
-        // Already sent during init, ignore
+        _sendJson({
+          '@type': 'setTdlibParameters',
+          'use_test_dc': false,
+          'api_id': _kApiId,
+          'api_hash': _kApiHash,
+          'system_language_code': 'en',
+          'device_model': 'Android',
+          'system_version': 'Unknown',
+          'application_version': '1.0',
+          'database_directory': '${_dbPath ?? "."}/db',
+          'files_directory': '${_dbPath ?? "."}/files',
+          'use_file_database': true,
+          'use_chat_info_database': true,
+          'use_message_database': true,
+          'use_secret_chats': false,
+          'enable_storage_optimizer': true,
+        });
         break;
       case AuthorizationStateWaitPhoneNumber():
         _currentStep = AuthStep.phone;
+        _authState = 'waitPhone';
         _loading = false;
         notifyListeners();
         break;
       case AuthorizationStateWaitCode():
         _currentStep = AuthStep.code;
+        _authState = 'waitCode';
         _loading = false;
         notifyListeners();
         break;
@@ -373,11 +418,13 @@ class TelegramService extends ChangeNotifier {
       case AuthorizationStateWaitPassword():
         _hint = state.passwordHint.isNotEmpty ? state.passwordHint : null;
         _currentStep = AuthStep.password;
+        _authState = 'waitPassword';
         _loading = false;
         notifyListeners();
         break;
       case AuthorizationStateReady():
         _currentStep = AuthStep.ready;
+        _authState = 'ready';
         _loading = false;
         notifyListeners();
         break;
@@ -389,11 +436,13 @@ class TelegramService extends ChangeNotifier {
         break;
       case AuthorizationStateClosed():
         _currentStep = AuthStep.closed;
+        _authState = 'closed';
         _initialized = false;
         notifyListeners();
         break;
       case AuthorizationStateLoggingOut():
         _currentStep = AuthStep.initializing;
+        _authState = 'initializing';
         notifyListeners();
         break;
       default:

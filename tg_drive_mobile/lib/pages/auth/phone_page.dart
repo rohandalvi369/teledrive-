@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../services/telegram_service.dart';
+import '../dashboard_page.dart';
 
 class PhonePage extends StatefulWidget {
   const PhonePage({super.key});
@@ -14,6 +15,9 @@ class PhonePage extends StatefulWidget {
 class _PhonePageState extends State<PhonePage> {
   final _phoneController = TextEditingController(text: '+91');
   final _focusNode = FocusNode();
+  TelegramService? _telegram;
+  String _lastAuthState = 'waitPhone';
+  bool _errorHandled = false;
 
   @override
   void initState() {
@@ -23,7 +27,48 @@ class _PhonePageState extends State<PhonePage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final telegram = context.read<TelegramService>();
+    if (_telegram == null) {
+      _telegram = telegram;
+      _lastAuthState = telegram.authState;
+      telegram.addListener(_onAuthChange);
+    }
+  }
+
+  void _onAuthChange() {
+    final ts = _telegram!;
+
+    if (ts.authState != _lastAuthState) {
+      _lastAuthState = ts.authState;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (ts.authState == 'ready') {
+          Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const DashboardPage()), (route) => false);
+        }
+      });
+    }
+
+    if (ts.error != null && !ts.loading && !_errorHandled) {
+      _errorHandled = true;
+      final err = ts.error!;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(err, style: GoogleFonts.inter(fontSize: 14)),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF1A1A2E),
+        ));
+      });
+    } else if (ts.error == null) {
+      _errorHandled = false;
+    }
+  }
+
+  @override
   void dispose() {
+    _telegram?.removeListener(_onAuthChange);
     _phoneController.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -120,7 +165,7 @@ class _PhonePageState extends State<PhonePage> {
                             ? const SizedBox(width: 22, height: 22,
                                 child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
                             : Text('Continue →',
-                                style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
                       ),
                     ),
                   ),

@@ -144,7 +144,16 @@ void _sendInit(TdSendDart tdSend, int clientId, Map<String, dynamic> params) {
     'ignore_file_names': false,
   };
 
-  final ptr = jsonEncode(request).toNativeUtf8();
+  var ptr = jsonEncode(request).toNativeUtf8();
+  tdSend(clientId, ptr);
+  calloc.free(ptr);
+
+  // Also check database encryption key so TDLib progresses past WaitEncryptionKey
+  final encRequest = {
+    '@type': 'checkDatabaseEncryptionKey',
+    'encryption_key': '',
+  };
+  ptr = jsonEncode(encRequest).toNativeUtf8();
   tdSend(clientId, ptr);
   calloc.free(ptr);
 }
