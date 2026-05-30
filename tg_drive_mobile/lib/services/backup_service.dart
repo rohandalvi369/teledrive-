@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -14,6 +13,8 @@ class BackupConfig {
   final Map<String, int> lastBackupTimestamps;
   final Map<String, int> fileCounts;
   final Map<String, int> storageUsed;
+  final String? destFolderId;
+  final String? destFolderName;
 
   BackupConfig({
     this.selectedFolderIds = const [],
@@ -22,6 +23,8 @@ class BackupConfig {
     this.lastBackupTimestamps = const {},
     this.fileCounts = const {},
     this.storageUsed = const {},
+    this.destFolderId,
+    this.destFolderName,
   });
 }
 
@@ -96,6 +99,8 @@ class BackupService extends ChangeNotifier {
       lastBackupTimestamps: _decodeMap(prefs.getString('backup_timestamps')),
       fileCounts: _decodeMap(prefs.getString('backup_file_counts')),
       storageUsed: _decodeMap(prefs.getString('backup_storage')),
+      destFolderId: prefs.getString('backup_dest_folder_id'),
+      destFolderName: prefs.getString('backup_dest_folder_name'),
     );
     notifyListeners();
   }
@@ -111,6 +116,16 @@ class BackupService extends ChangeNotifier {
         'backup_file_counts', _encodeMap(_config.fileCounts));
     await prefs.setString(
         'backup_storage', _encodeMap(_config.storageUsed));
+    if (_config.destFolderId != null) {
+      await prefs.setString('backup_dest_folder_id', _config.destFolderId!);
+    } else {
+      await prefs.remove('backup_dest_folder_id');
+    }
+    if (_config.destFolderName != null) {
+      await prefs.setString('backup_dest_folder_name', _config.destFolderName!);
+    } else {
+      await prefs.remove('backup_dest_folder_name');
+    }
   }
 
   Map<String, int> _decodeMap(String? json) {
@@ -171,6 +186,8 @@ class BackupService extends ChangeNotifier {
       lastBackupTimestamps: _config.lastBackupTimestamps,
       fileCounts: _config.fileCounts,
       storageUsed: _config.storageUsed,
+      destFolderId: _config.destFolderId,
+      destFolderName: _config.destFolderName,
     );
     saveConfig();
     notifyListeners();
@@ -184,6 +201,8 @@ class BackupService extends ChangeNotifier {
       lastBackupTimestamps: _config.lastBackupTimestamps,
       fileCounts: _config.fileCounts,
       storageUsed: _config.storageUsed,
+      destFolderId: _config.destFolderId,
+      destFolderName: _config.destFolderName,
     );
     saveConfig();
     if (value) {
@@ -223,6 +242,21 @@ class BackupService extends ChangeNotifier {
     }
   }
 
+  void setDestFolder(String? id, String? name) {
+    _config = BackupConfig(
+      selectedFolderIds: _config.selectedFolderIds,
+      autoBackup: _config.autoBackup,
+      useOriginal: _config.useOriginal,
+      lastBackupTimestamps: _config.lastBackupTimestamps,
+      fileCounts: _config.fileCounts,
+      storageUsed: _config.storageUsed,
+      destFolderId: id,
+      destFolderName: name,
+    );
+    saveConfig();
+    notifyListeners();
+  }
+
   void setQuality(bool original) {
     _config = BackupConfig(
       selectedFolderIds: _config.selectedFolderIds,
@@ -231,6 +265,8 @@ class BackupService extends ChangeNotifier {
       lastBackupTimestamps: _config.lastBackupTimestamps,
       fileCounts: _config.fileCounts,
       storageUsed: _config.storageUsed,
+      destFolderId: _config.destFolderId,
+      destFolderName: _config.destFolderName,
     );
     saveConfig();
     notifyListeners();
@@ -333,6 +369,8 @@ class BackupService extends ChangeNotifier {
           lastBackupTimestamps: timestamps,
           fileCounts: counts,
           storageUsed: storage,
+          destFolderId: _config.destFolderId,
+          destFolderName: _config.destFolderName,
         );
         await saveConfig();
 
@@ -374,6 +412,8 @@ class BackupService extends ChangeNotifier {
       lastBackupTimestamps: timestamps,
       fileCounts: counts,
       storageUsed: storage,
+      destFolderId: _config.destFolderId,
+      destFolderName: _config.destFolderName,
     );
     saveConfig();
     _folders = _folders.map((f) {

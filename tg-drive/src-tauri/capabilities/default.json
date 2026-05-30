@@ -6,6 +6,24 @@
     "main"
   ],
   "permissions": [
-    "core:default"
+    "core:default",
+    "dialog:default",
+    "fs:default",
+    {
+      "identifier": "fs:allow-read",
+      "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-read-dir",
+      "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-stat",
+      "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [{ "path": "**" }]
+    }
   ]
 }

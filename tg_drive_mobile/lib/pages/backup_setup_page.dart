@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../services/backup_service.dart';
 import '../services/api_service.dart';
+import '../services/file_service.dart';
 import 'backup_progress_page.dart';
 import 'backup_status_page.dart';
 
@@ -26,7 +27,25 @@ class _BackupSetupPageState extends State<BackupSetupPage> {
         apiUrl: api.baseUrl,
         session: null,
       );
+      final fs = context.read<FileService>();
+      if (fs.folders.isEmpty) fs.fetchFolders();
     });
+  }
+
+  void _showFolderPicker(BuildContext ctx, FileService fs, BackupService bs) {
+    showModalBottomSheet(
+      context: ctx,
+      builder: (ctx2) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Padding(padding: const EdgeInsets.all(16), child: Text('Backup Destination', style: Theme.of(ctx2).textTheme.titleMedium)),
+        ...fs.folders.map((f) => ListTile(
+          leading: Icon(f.type == 'saved' ? Icons.save : Icons.folder),
+          title: Text(f.title),
+          trailing: bs.config.destFolderId == f.id ? Icon(Icons.check, color: Theme.of(ctx2).colorScheme.primary) : null,
+          onTap: () { bs.setDestFolder(f.id, f.title); Navigator.pop(ctx2); },
+        )),
+        const SizedBox(height: 8),
+      ])),
+    );
   }
 
   Future<void> _requestNotificationPermission() async {
@@ -110,6 +129,60 @@ class _BackupSetupPageState extends State<BackupSetupPage> {
                   ),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // ─── Destination Folder ──────────────────────────────
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Icon(Icons.folder_outlined, color: theme.colorScheme.primary),
+                  const SizedBox(width: 12),
+                  Text('Destination Folder', style: theme.textTheme.titleMedium),
+                ]),
+                const SizedBox(height: 8),
+                Consumer<FileService>(
+                  builder: (ctx, fs, _) {
+                    final destId = bs.config.destFolderId;
+                    final destName = bs.config.destFolderName;
+                    final selected = destId != null
+                        ? fs.folders.where((f) => f.id == destId).firstOrNull
+                        : null;
+                    return InkWell(
+                      onTap: () => _showFolderPicker(ctx, fs, bs),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(children: [
+                          Icon(selected?.type == 'saved' ? Icons.save : Icons.folder,
+                              color: theme.colorScheme.primary, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              destName ?? (destId != null ? 'Folder $destId' : 'Select a folder...'),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: destName != null ? null : theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          Icon(Icons.arrow_drop_down, color: theme.colorScheme.onSurfaceVariant),
+                        ]),
+                      ),
+                    );
+                  },
+                ),
+                if (bs.config.destFolderId != null) ...[
+                  const SizedBox(height: 8),
+                  Text('Backup files will be uploaded to this folder',
+                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                ],
+              ]),
             ),
           ),
           const SizedBox(height: 12),

@@ -10,6 +10,18 @@ interface Props {
 let resolveCode: ((v: string) => void) | null = null
 let resolvePassword: ((v: string) => void) | null = null
 
+async function verifySession(client: any): Promise<string | null> {
+  try {
+    const me = await client.getMe()
+    if (!me) return 'Could not retrieve user info'
+    const dialogs = await client.getDialogs({ limit: 1 })
+    if (!dialogs) return 'Could not access dialogs'
+    return null
+  } catch (err: any) {
+    return err.message || 'Session verification failed'
+  }
+}
+
 export default function Auth({ onAuthSuccess }: Props) {
   const [step, setStep] = useState<Step>('phone')
   const [phone, setPhone] = useState('')
@@ -19,12 +31,14 @@ export default function Auth({ onAuthSuccess }: Props) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const running = useRef(false)
+  const aborted = useRef(false)
 
   const handleStartAuth = useCallback(async () => {
     if (running.current) return
     running.current = true
     setLoading(true)
     setError('')
+    aborted.current = false
 
     try {
       const { client, stringSession } = createClient()
@@ -36,12 +50,16 @@ export default function Auth({ onAuthSuccess }: Props) {
         phoneNumber: phone,
         phoneCode: async () => {
           setStep('code')
-          return new Promise(r => { resolveCode = r })
+          const code = await new Promise<string>(r => { resolveCode = r })
+          if (aborted.current) throw new Error('Cancelled')
+          return code
         },
         password: async (hint?: string) => {
           if (hint) setHint(hint)
           setStep('password')
-          return new Promise(r => { resolvePassword = r })
+          const pwd = await new Promise<string>(r => { resolvePassword = r })
+          if (aborted.current) throw new Error('Cancelled')
+          return pwd
         },
         onError: (err) => {
           setError(err.message)
@@ -49,6 +67,14 @@ export default function Auth({ onAuthSuccess }: Props) {
       })
 
       setSession(stringSession.save() as string)
+
+      const verifyError = await verifySession(client)
+      if (verifyError) {
+        setError(verifyError)
+        setStep('phone')
+        return
+      }
+
       onAuthSuccess()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Authentication failed'
@@ -59,6 +85,17 @@ export default function Auth({ onAuthSuccess }: Props) {
       running.current = false
     }
   }, [phone, onAuthSuccess])
+
+  const handleBack = () => {
+    aborted.current = true
+    if (resolveCode) { resolveCode(''); resolveCode = null }
+    if (resolvePassword) { resolvePassword(''); resolvePassword = null }
+    setStep('phone')
+    setCode('')
+    setPwd('')
+    setHint('')
+    setError('')
+  }
 
   const handleSubmitCode = () => {
     if (resolveCode && code) {
@@ -118,6 +155,7 @@ export default function Auth({ onAuthSuccess }: Props) {
 
         {step === 'code' && (
           <div className="space-y-4">
+            <button onClick={handleBack} className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors">&larr; Back</button>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">Enter the code sent to your Telegram</p>
             <input
               type="text"
@@ -140,6 +178,7 @@ export default function Auth({ onAuthSuccess }: Props) {
 
         {step === 'password' && (
           <div className="space-y-4">
+            <button onClick={handleBack} className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors">&larr; Back</button>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">Two-factor authentication required</p>
             {hint && (
               <p className="text-xs text-zinc-400 dark:text-zinc-500">Hint: {hint}</p>
@@ -161,6 +200,20 @@ export default function Auth({ onAuthSuccess }: Props) {
             </button>
           </div>
         )}
+        <div className="mt-6 text-center">
+          <button
+            onClick={() => {
+              window.history.pushState({}, '', '/privacy')
+              window.location.reload()
+            }}
+            className="text-xs transition-colors"
+            style={{ color: 'var(--color-text-tertiary)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-accent)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-tertiary)' }}
+          >
+            Privacy Policy
+          </button>
+        </div>
       </div>
     </div>
   )

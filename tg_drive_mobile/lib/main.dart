@@ -1,7 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 import 'services/telegram_service.dart';
 import 'services/file_service.dart';
@@ -12,6 +12,7 @@ import 'services/trash_service.dart';
 import 'services/favorites_service.dart';
 import 'services/notification_service.dart';
 import 'services/backup_worker.dart';
+import 'theme/app_theme.dart';
 import 'pages/auth/auth_flow.dart';
 import 'pages/dashboard_page.dart';
 
@@ -48,10 +49,16 @@ void main() async {
     isInDebugMode: false,
   );
 
-  runApp(_AppWrapper());
+  final prefs = await SharedPreferences.getInstance();
+  final savedUrl = prefs.getString('backup_api_url');
+
+  runApp(_AppWrapper(savedApiUrl: savedUrl));
 }
 
 class _AppWrapper extends StatelessWidget {
+  final String? savedApiUrl;
+  const _AppWrapper({this.savedApiUrl});
+
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -61,7 +68,7 @@ class _AppWrapper extends StatelessWidget {
         ChangeNotifierProvider(
           create: (ctx) => FileService(ctx.read<TelegramService>()),
         ),
-        Provider(create: (_) => ApiService()),
+        Provider(create: (_) => ApiService(baseUrl: savedApiUrl ?? 'http://192.168.1.100:3000')),
         ChangeNotifierProvider(
           create: (ctx) => BackupService(ctx.read<ApiService>()),
         ),
@@ -88,21 +95,9 @@ class TeleDriveApp extends StatelessWidget {
     return MaterialApp(
       title: 'TeleDrive',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6366F1),
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6366F1),
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
-      themeMode: themeService.themeMode,
+      theme: AppTheme.darkTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.dark,
       home: telegram.isAuthenticated
           ? const DashboardPage()
           : const AuthFlow(),

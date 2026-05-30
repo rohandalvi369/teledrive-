@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../models/drive_file.dart';
 
@@ -7,16 +8,16 @@ class FileCard extends StatelessWidget {
 
   const FileCard({super.key, required this.file, required this.onTap});
 
-  IconData _getIcon() {
-    if (file.mimeType.startsWith('image/')) return Icons.image;
-    if (file.mimeType.startsWith('video/')) return Icons.videocam;
-    if (file.mimeType.startsWith('audio/')) return Icons.audiotrack;
-    if (file.mimeType.startsWith('text/')) return Icons.description;
-    if (file.mimeType.contains('pdf')) return Icons.picture_as_pdf;
+  (IconData, Color) _getIconAndColor() {
+    if (file.mimeType.startsWith('image/')) return (Icons.image, Colors.blue);
+    if (file.mimeType.startsWith('video/')) return (Icons.videocam, Colors.purple);
+    if (file.mimeType.startsWith('audio/')) return (Icons.music_note, Colors.green);
+    if (file.mimeType.startsWith('text/')) return (Icons.description, Colors.orange);
+    if (file.mimeType.contains('pdf')) return (Icons.picture_as_pdf, Colors.red);
     if (file.mimeType.contains('zip') || file.mimeType.contains('rar') || file.mimeType.contains('tar')) {
-      return Icons.folder_zip;
+      return (Icons.folder_zip, Colors.brown);
     }
-    return Icons.insert_drive_file;
+    return (Icons.insert_drive_file, Colors.grey);
   }
 
   String _formatSize(int bytes) {
@@ -36,6 +37,9 @@ class FileCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final (icon, color) = _getIconAndColor();
+    final showThumbnail = file.thumbnailBase64 != null && file.thumbnailBase64!.isNotEmpty;
+
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -44,7 +48,24 @@ class FileCard extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              Icon(_getIcon(), size: 36, color: theme.colorScheme.primary),
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: showThumbnail ? null : color.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: showThumbnail
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.memory(
+                          base64Decode(file.thumbnailBase64!),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Icon(icon, size: 22, color: color),
+                        ),
+                      )
+                    : Icon(icon, size: 22, color: color),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

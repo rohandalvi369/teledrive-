@@ -41,8 +41,8 @@ export default function ContextMenu({ x, y, items, onClose }: Props) {
   return (
     <div
       ref={ref}
-      className="fixed z-[100] bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-lg dark:shadow-2xl py-1 min-w-[160px]"
-      style={{ left: adjustedX, top: adjustedY }}
+      className="fixed z-[100] border rounded-xl shadow-lg py-1 min-w-[160px]"
+      style={{ left: adjustedX, top: adjustedY, background: 'var(--color-modal-bg)', borderColor: 'var(--color-border)' }}
     >
       {items.map((item, i) => (
         <button
@@ -50,9 +50,14 @@ export default function ContextMenu({ x, y, items, onClose }: Props) {
           onClick={() => { item.onClick(); onClose() }}
           className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
             item.danger
-              ? 'text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-300'
-              : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700/50 hover:text-zinc-800 dark:hover:text-zinc-100'
+              ? 'hover:bg-red-500/10'
+              : ''
           }`}
+          onMouseEnter={!item.danger ? (e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-accent) 8%, transparent)' } : undefined}
+          onMouseLeave={!item.danger ? (e) => { e.currentTarget.style.background = '' } : undefined}
+          style={{
+            color: item.danger ? '#ef4444' : 'var(--color-text)',
+          }}
         >
           {item.icon && <span className="text-base w-5 text-center leading-none">{item.icon}</span>}
           {item.label}

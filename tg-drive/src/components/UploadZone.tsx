@@ -1,23 +1,65 @@
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
 
 interface Props {
   onUploadFiles: (files: File[]) => void
   uploading: boolean
+  folderName?: string
 }
 
-export default function UploadZone({ onUploadFiles, uploading }: Props) {
+export default function UploadZone({ onUploadFiles, uploading, folderName }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
+  const dragCounter = useRef(0)
 
   const handleFiles = useCallback((fileList: FileList) => {
     const files = Array.from(fileList)
     if (files.length > 0) onUploadFiles(files)
   }, [onUploadFiles])
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setDragging(false)
-    if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files)
+  useEffect(() => {
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault()
+    }
+
+    const handleDragEnter = (e: DragEvent) => {
+      e.preventDefault()
+      if (e.dataTransfer?.types.includes('Files')) {
+        dragCounter.current++
+        setDragging(true)
+      }
+    }
+
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault()
+      if (e.dataTransfer?.types.includes('Files')) {
+        dragCounter.current--
+        if (dragCounter.current <= 0) {
+          dragCounter.current = 0
+          setDragging(false)
+        }
+      }
+    }
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault()
+      dragCounter.current = 0
+      setDragging(false)
+      if (e.dataTransfer?.files.length) {
+        handleFiles(e.dataTransfer.files)
+      }
+    }
+
+    window.addEventListener('dragover', handleDragOver)
+    window.addEventListener('dragenter', handleDragEnter)
+    window.addEventListener('dragleave', handleDragLeave)
+    window.addEventListener('drop', handleDrop)
+
+    return () => {
+      window.removeEventListener('dragover', handleDragOver)
+      window.removeEventListener('dragenter', handleDragEnter)
+      window.removeEventListener('dragleave', handleDragLeave)
+      window.removeEventListener('drop', handleDrop)
+    }
   }, [handleFiles])
 
   return (
@@ -32,7 +74,10 @@ export default function UploadZone({ onUploadFiles, uploading }: Props) {
       <button
         onClick={() => inputRef.current?.click()}
         disabled={uploading}
-        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-500 dark:bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-400 dark:hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        style={{ background: 'var(--color-accent)' }}
+        onMouseEnter={(e) => !e.currentTarget.disabled && (e.currentTarget.style.filter = 'brightness(0.9)')}
+        onMouseLeave={(e) => (e.currentTarget.style.filter = '')}
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -42,24 +87,29 @@ export default function UploadZone({ onUploadFiles, uploading }: Props) {
 
       {dragging && (
         <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-indigo-100/40 dark:bg-indigo-900/20 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm"
+          style={{ background: 'color-mix(in srgb, var(--color-accent) 10%, transparent)' }}
           onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={handleDrop}
+          onDragLeave={() => {}}
+          onDrop={(e) => {
+            e.preventDefault()
+            dragCounter.current = 0
+            setDragging(false)
+            if (e.dataTransfer.files.length) {
+              handleFiles(e.dataTransfer.files)
+            }
+          }}
         >
-          <div className="border-2 border-dashed border-indigo-400 dark:border-indigo-500/50 rounded-3xl p-12 text-center bg-white/60 dark:bg-transparent">
-            <svg className="w-12 h-12 mx-auto mb-3 text-indigo-500 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="border-2 border-dashed rounded-3xl p-14 text-center shadow-2xl"
+            style={{ borderColor: 'var(--color-accent)', background: 'color-mix(in srgb, var(--color-surface) 85%, transparent)' }}>
+            <svg className="w-14 h-14 mx-auto mb-4" style={{ color: 'var(--color-accent)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
-            <p className="text-lg font-medium text-indigo-600 dark:text-indigo-300">Drop files anywhere</p>
+            <p className="text-xl font-medium" style={{ color: 'var(--color-accent)' }}>Drop files to upload{folderName ? ` to ${folderName}` : ''}</p>
+            <p className="text-sm mt-2" style={{ color: 'var(--color-accent)' }}>any file type supported</p>
           </div>
         </div>
       )}
-
-      <div
-        className="fixed inset-0 z-30 pointer-events-none"
-        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
-      />
     </>
   )
 }

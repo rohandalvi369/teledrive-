@@ -1,18 +1,16 @@
-import express from 'express';
-import cors from 'cors';
-import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
-import { TelegramClient } from 'telegram';
-import { StringSession } from 'telegram/sessions';
-import { Api } from 'telegram/tl';
-import bigInt from 'big-integer';
+const express = require('express');
+const cors = require('cors');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const bigInt = require('big-integer');
+const { TelegramClient, Api } = require('telegram');
+const { StringSession } = require('telegram/sessions');
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SESSION_FILE = path.join(__dirname, 'session.json');
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const BACKUP_MARKER = 'tg-drive-folder';
+const TRASH_MARKER = 'tg-drive-trash';
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -59,22 +57,47 @@ function clearSession() {
   }
 }
 
-async function getClient() {
-  if (client && client.connected) return client;
-  const sessionData = loadSession();
-  const ss = new StringSession(sessionData?.session || '');
+async function loadClient(sessionStr) {
+  // Reuse existing global client if still connected and authorized
+  if (client) {
+    try {
+      if (await client.checkAuthorization()) {
+        return client;
+      }
+    } catch {
+      try { await client.disconnect(); } catch {}
+      client = null;
+    }
+  }
+
+  const sessionData = sessionStr || loadSession()?.session || '';
+  const ss = new StringSession(sessionData);
   stringSession = ss;
-  client = new TelegramClient(ss, API_ID, API_HASH, {
+  const c = new TelegramClient(ss, API_ID, API_HASH, {
     connectionRetries: 5,
     useWSS: true,
   });
-  await client.connect();
-  if (sessionData?.phone) currentPhone = sessionData.phone;
-  return client;
+  await c.connect();
+
+  if (sessionData) {
+    const deadline = Date.now() + 30000;
+    let authed = false;
+    while (Date.now() < deadline) {
+      authed = await c.isUserAuthorized();
+      if (authed) break;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+    if (!authed) throw new Error('Session expired or invalid');
+  }
+
+  client = c;
+  const loaded = loadSession();
+  if (loaded?.phone) currentPhone = loaded.phone;
+  return c;
 }
 
-async function ensureConnected() {
-  const c = await getClient();
+async function ensureConnected(sessionStr) {
+  const c = await loadClient(sessionStr);
   if (!(await c.checkAuthorization())) {
     throw new Error('Not authenticated');
   }
@@ -88,7 +111,7 @@ app.post('/auth/phone', async (req, res) => {
     const { phoneNumber } = req.body;
     if (!phoneNumber) return res.status(400).json({ error: 'phoneNumber required' });
 
-    const c = await getClient();
+    const c = await loadClient();
     const result = await c.sendCode(phoneNumber, undefined);
     currentPhone = phoneNumber;
     currentPhoneHash = result.phoneCodeHash;
@@ -103,7 +126,7 @@ app.post('/auth/verify', async (req, res) => {
     const { phoneNumber, code, phoneCodeHash } = req.body;
     if (!phoneNumber || !code) return res.status(400).json({ error: 'phoneNumber and code required' });
 
-    const c = await getClient();
+    const c = await loadClient();
     try {
       const result = await c.invoke(
         new Api.auth.SignIn({
@@ -133,7 +156,7 @@ app.post('/auth/password', async (req, res) => {
     const { password } = req.body;
     if (!password) return res.status(400).json({ error: 'password required' });
 
-    const c = await getClient();
+    const c = await loadClient();
     try {
       await c.signInUser({ password });
       const me = await c.getMe();
@@ -151,7 +174,7 @@ app.post('/auth/password', async (req, res) => {
 
 app.get('/auth/state', async (req, res) => {
   try {
-    const c = await getClient();
+    const c = await loadClient();
     const authed = await c.checkAuthorization();
     let user = null;
     if (authed) {
@@ -209,7 +232,7 @@ app.get('/folders', async (req, res) => {
             );
             const about = full.fullChat?.about || '';
             if (about === BACKUP_MARKER || about.startsWith('Backup:')) {
-              if (channel.title === 'tg-drive-trash' || channel.title === 'tg-drive-favorites') continue;
+              if (channel.title === 'tg-drive-trash') continue;
               folders.push(channelToFolder(channel, channel.accessHash));
             }
           } catch (e) {
@@ -224,38 +247,29 @@ app.get('/folders', async (req, res) => {
   }
 });
 
-app.post('/folders/create', async (req, res) => {
+app.post("/folders/create", async (req, res) => {
   try {
-    const { title, description } = req.body;
-    if (!title) return res.status(400).json({ error: 'title required' });
-
-    const c = await ensureConnected();
-    const result = await c.invoke(
+    const { session, name } = req.body;
+    const client = new TelegramClient(
+      new StringSession(session),
+      33624340,
+      "e91bb3030342033d159f40937522b046",
+      { connectionRetries: 3 }
+    );
+    await client.connect();
+    const result = await client.invoke(
       new Api.channels.CreateChannel({
-        title,
-        about: description || BACKUP_MARKER,
-        broadcast: true,
-        megagroup: false,
+        title: name,
+        about: "tg-drive-folder",
+        broadcast: false,
+        megagroup: true,
       })
     );
-    const chat = result.chats?.[0];
-    if (!chat) throw new Error('Failed to create channel');
-    // Set the about/description if it wasn't set above
-    if (description) {
-      try {
-        await c.invoke(
-          new Api.channels.SetDescription({
-            channel: chat.id,
-            description: description,
-          })
-        );
-      } catch (e) {
-        // non-critical
-      }
-    }
-    res.json({ ok: true, folder: channelToFolder(chat, chat.accessHash) });
+    await client.disconnect();
+    res.json({ success: true, folderId: result.chats[0].id.toString(), name: result.chats[0].title });
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    console.error("FOLDER ERROR:", e);
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -361,7 +375,13 @@ app.post('/files/list', async (req, res) => {
     }
 
     const messages = await c.getMessages(peer, { filter, limit: 100 });
-    const files = messages.map(extractFileInfo).filter(Boolean);
+    const seen = new Set();
+    const unique = messages.filter(m => {
+      if (!m || seen.has(m.id)) return false;
+      seen.add(m.id);
+      return true;
+    });
+    const files = unique.map(extractFileInfo).filter(Boolean);
     res.json({ ok: true, files });
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -370,68 +390,50 @@ app.post('/files/list', async (req, res) => {
 
 // ─── Upload ─────────────────────────────────────────────────────
 
-app.post('/upload', upload.array('files', 50), async (req, res) => {
+app.post('/upload', upload.single('file'), async (req, res) => {
   try {
-    const { chatId, accessHash } = req.body;
-    const files = req.files;
-    if (!chatId || !files || files.length === 0) {
-      return res.status(400).json({ error: 'chatId and files required' });
+    const { chatId, accessHash, fileName, session } = req.body;
+    const file = req.file;
+    if (!chatId || !file) {
+      return res.status(400).json({ error: 'chatId and file required' });
     }
 
-    const c = await ensureConnected();
-    const peer = makePeer({ chatId, accessHash, type: chatId === 'me' ? 'saved' : 'channel' });
-    const batchId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    const results = [];
+    const c = await ensureConnected(session);
+    const peer = chatId === 'me'
+      ? 'me'
+      : new Api.InputPeerChannel({
+          channelId: bigInt(chatId),
+          accessHash: bigInt(accessHash || '0'),
+        });
 
-    const progress = files.map(f => ({ fileName: f.originalname, status: 'queued', progress: 0 }));
-    uploadProgress.set(batchId, { files: progress, completed: false });
+    const filePath = path.resolve(file.path);
+    const name = fileName || file.originalname || 'unnamed';
 
-    res.json({ ok: true, batchId, files: progress });
-
-    // Upload files in parallel (max 3 at a time)
-    const chunks = [];
-    for (let i = 0; i < files.length; i += 3) {
-      chunks.push(files.slice(i, i + 3));
-    }
-
-    for (const chunk of chunks) {
-      await Promise.all(chunk.map(async (file, idx) => {
-        const globalIdx = files.indexOf(file);
-        try {
-          const filePath = file.path;
-          const absolutePath = path.resolve(filePath);
-          progress[globalIdx].status = 'uploading';
-          await c.sendFile(peer, {
-            file: absolutePath,
-            forceDocument: true,
-            workers: 1,
-            progressCallback: (current, total) => {
-              const pct = total > 0 ? current / total : 0;
-              progress[globalIdx].progress = pct;
-            },
-          });
-          progress[globalIdx].status = 'done';
-          progress[globalIdx].progress = 1;
-          results.push({ fileName: file.originalname, status: 'done' });
-        } catch (e) {
-          progress[globalIdx].status = 'failed';
-          progress[globalIdx].error = e.message;
-          results.push({ fileName: file.originalname, status: 'failed', error: e.message });
-        } finally {
-          try { fs.unlinkSync(file.path); } catch (_) {}
-        }
-      }));
-    }
-
-    progress.forEach(p => {
-      if (p.status === 'queued' || p.status === 'uploading') {
-        p.status = 'done';
-        p.progress = 1;
-      }
+    const messages = await c.sendFile(peer, {
+      file: filePath,
+      fileName: name,
+      forceDocument: true,
+      workers: 1,
     });
-    uploadProgress.set(batchId, { files: progress, completed: true, results });
+
+    let messageId;
+    if (Array.isArray(messages)) {
+      messageId = messages[0]?.id;
+    } else if (messages?.id) {
+      messageId = messages.id;
+    } else if (messages?.updates?.[0]?.id) {
+      messageId = messages.updates[0].id;
+    }
+
+    try { fs.unlinkSync(file.path); } catch (_) {}
+
+    if (!messageId) {
+      return res.json({ success: true, messageId: null });
+    }
+    res.json({ success: true, messageId });
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    try { if (req.file?.path) fs.unlinkSync(req.file.path); } catch (_) {}
+    res.status(400).json({ success: false, error: e.message || 'Upload failed' });
   }
 });
 
@@ -541,11 +543,43 @@ app.post('/files/move', async (req, res) => {
   }
 });
 
+// ─── Copy (Forward only) ─────────────────────────────────────────
+
+app.post('/files/copy', async (req, res) => {
+  try {
+    const { fromChatId, fromAccessHash, toChatId, toAccessHash, messageIds } = req.body;
+    if (!fromChatId || !toChatId || !messageIds || !messageIds.length) {
+      return res.status(400).json({ error: 'fromChatId, toChatId, messageIds required' });
+    }
+
+    const c = await ensureConnected();
+    const fromPeer = fromChatId === 'me' ? 'me' : new Api.InputPeerChannel({
+      channelId: bigInt(fromChatId),
+      accessHash: bigInt(fromAccessHash || '0'),
+    });
+    const toPeer = toChatId === 'me' ? 'me' : new Api.InputPeerChannel({
+      channelId: bigInt(toChatId),
+      accessHash: bigInt(toAccessHash || '0'),
+    });
+
+    await c.invoke(
+      new Api.messages.ForwardMessages({
+        fromPeer,
+        toPeer,
+        id: messageIds,
+        randomId: messageIds.map(() => bigInt(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER))),
+      })
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 // ─── Special Channel Helpers ────────────────────────────────────
 
 const SPECIAL_CHANNELS = {
-  TRASH: { title: 'tg-drive-trash', about: BACKUP_MARKER },
-  FAVORITES: { title: 'tg-drive-favorites', about: BACKUP_MARKER },
+  TRASH: { title: 'tg-drive-trash', about: TRASH_MARKER },
 };
 
 async function findOrCreateSpecialChannel(c, key) {
@@ -597,7 +631,7 @@ app.get('/stats', async (req, res) => {
         const full = await c.invoke(new Api.channels.GetFullChannel({ channel: ch.id }));
         const about = full.fullChat?.about || '';
         if (about !== BACKUP_MARKER) continue;
-        if (ch.title === 'tg-drive-trash' || ch.title === 'tg-drive-favorites') continue;
+        if (ch.title === 'tg-drive-trash') continue;
       } catch { continue; }
 
       const peer = new Api.InputPeerChannel({ channelId: bigInt(ch.id), accessHash: bigInt(ch.accessHash || '0') });
@@ -746,49 +780,17 @@ app.post('/trash/purge', async (req, res) => {
   }
 });
 
-// ─── Favorites ──────────────────────────────────────────────────
-
-app.post('/favorites/add', async (req, res) => {
+app.post('/trash/delete', async (req, res) => {
   try {
-    const { messageId, sourceChatId, sourceAccessHash } = req.body;
-    if (!messageId || !sourceChatId) return res.status(400).json({ error: 'messageId and sourceChatId required' });
+    const { messageIds } = req.body;
+    if (!messageIds || !messageIds.length) return res.status(400).json({ error: 'messageIds required' });
     const c = await ensureConnected();
-    const fav = await findOrCreateSpecialChannel(c, 'FAVORITES');
-    const favPeer = new Api.InputPeerChannel({ channelId: bigInt(fav.id), accessHash: bigInt(fav.accessHash) });
-    const sourcePeer = new Api.InputPeerChannel({ channelId: bigInt(sourceChatId), accessHash: bigInt(sourceAccessHash || '0') });
-    await c.invoke(new Api.messages.ForwardMessages({
-      fromPeer: sourcePeer, toPeer: favPeer, id: [messageId],
-      randomId: [bigInt(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER))],
-    }));
-    res.json({ ok: true, favoriteChatId: fav.id, favoriteAccessHash: fav.accessHash });
-  } catch (e) {
-    res.status(400).json({ error: e.message });
-  }
-});
-
-app.post('/favorites/remove', async (req, res) => {
-  try {
-    const { messageId } = req.body;
-    if (!messageId) return res.status(400).json({ error: 'messageId required' });
-    const c = await ensureConnected();
-    const fav = await findOrCreateSpecialChannel(c, 'FAVORITES');
-    const favPeer = new Api.InputPeerChannel({ channelId: bigInt(fav.id), accessHash: bigInt(fav.accessHash) });
-    await c.invoke(new Api.channels.DeleteMessages({ channel: favPeer, id: [messageId] }));
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(400).json({ error: e.message });
-  }
-});
-
-app.get('/favorites', async (req, res) => {
-  try {
-    const c = await ensureConnected();
-    const fav = await findOrCreateSpecialChannel(c, 'FAVORITES');
-    const peer = new Api.InputPeerChannel({ channelId: bigInt(fav.id), accessHash: bigInt(fav.accessHash) });
-    // Get all document-type messages
-    const docMsgs = await c.getMessages(peer, { filter: new Api.InputMessagesFilterDocument(), limit: 200 });
-    const files = docMsgs.map(extractFileInfo).filter(Boolean);
-    res.json({ ok: true, files });
+    const trash = await findOrCreateSpecialChannel(c, 'TRASH');
+    const peer = new Api.InputPeerChannel({ channelId: bigInt(trash.id), accessHash: bigInt(trash.accessHash) });
+    for (let i = 0; i < messageIds.length; i += 100) {
+      await c.invoke(new Api.channels.DeleteMessages({ channel: peer, id: messageIds.slice(i, i + 100) }));
+    }
+    res.json({ ok: true, deleted: messageIds.length });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
@@ -889,6 +891,155 @@ app.post('/backup/upload-batch', async (req, res) => {
   }
 });
 
+// ─── Ping ───────────────────────────────────────────────────────
+
+app.post('/ping', async (req, res) => {
+  try {
+    const { session } = req.body;
+    await ensureConnected(session);
+    res.json({ ok: true });
+  } catch (e) {
+    res.json({ ok: false, error: e.message || 'Connection failed' });
+  }
+});
+
+app.get('/preview', async (req, res) => {
+  try {
+    const { session, messageId, folderId, folderAccessHash, folderType } = req.query;
+    if (!session || !messageId) {
+      return res.status(400).json({ error: 'session and messageId required' });
+    }
+    const c = await ensureConnected(session);
+    const peer = folderType === 'saved' || folderId === 'me'
+      ? 'me'
+      : new Api.InputPeerChannel({
+          channelId: bigInt(String(folderId)),
+          accessHash: bigInt(String(folderAccessHash || '0')),
+        });
+    const messages = await c.getMessages(peer, { ids: [Number(messageId)] });
+    const msg = messages[0];
+    if (!msg || !msg.media) {
+      return res.status(404).json({ error: 'Message not found or no media' });
+    }
+    const doc = msg.media.document;
+    if (!doc || Number(doc.size) > 50 * 1024 * 1024) {
+      return res.status(413).json({ error: 'File too large to preview' });
+    }
+    const totalSize = Number(doc.size);
+    const mimeType = doc.mimeType || 'application/octet-stream';
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Length', totalSize);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+
+    const CHUNK_SIZE = 256 * 1024;
+    let offset = 0;
+    while (offset < totalSize) {
+      const limit = Math.min(CHUNK_SIZE, totalSize - offset);
+      const result = await c.invoke(new Api.upload.GetFile({
+        precise: true,
+        cdn_supported: false,
+        location: new Api.InputDocumentFileLocation({
+          id: doc.id,
+          accessHash: doc.accessHash,
+          fileReference: doc.fileReference,
+          thumbSize: '',
+        }),
+        offset,
+        limit,
+      }));
+      if (!result || !result.bytes || result.bytes.length === 0) break;
+      res.write(result.bytes);
+      offset += result.bytes.length;
+    }
+    res.end();
+  } catch (e) {
+    console.error('PREVIEW ERROR:', e);
+    if (!res.headersSent) {
+      res.status(500).json({ error: e.message });
+    }
+  }
+});
+
+app.get('/stream', async (req, res) => {
+  try {
+    const { session, messageId, folderId, folderAccessHash, folderType } = req.query;
+    if (!session || !messageId) {
+      return res.status(400).json({ error: 'session and messageId required' });
+    }
+    const c = await ensureConnected(session);
+    const peer = folderType === 'saved' || folderId === 'me'
+      ? 'me'
+      : new Api.InputPeerChannel({
+          channelId: bigInt(String(folderId)),
+          accessHash: bigInt(String(folderAccessHash || '0')),
+        });
+    const messages = await c.getMessages(peer, { ids: [Number(messageId)] });
+    const msg = messages[0];
+    if (!msg || !msg.media) {
+      return res.status(404).json({ error: 'Message not found or no media' });
+    }
+    const doc = msg.media.document;
+    if (!doc) {
+      return res.status(404).json({ error: 'No document in message' });
+    }
+    const totalSize = Number(doc.size);
+    const mimeType = doc.mimeType || 'application/octet-stream';
+
+    const rangeHeader = req.headers.range;
+    let start = 0, end = totalSize - 1;
+    if (rangeHeader) {
+      const parts = rangeHeader.replace(/bytes=/, '').split('-');
+      start = parseInt(parts[0], 10);
+      if (!isNaN(start)) {
+        end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
+        if (isNaN(end)) end = totalSize - 1;
+      } else {
+        // Range: bytes=-500 (suffix)
+        const suffix = parseInt(parts[1], 10);
+        start = Math.max(0, totalSize - suffix);
+        end = totalSize - 1;
+      }
+    }
+
+    const contentLength = end - start + 1;
+    if (rangeHeader) {
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${totalSize}`);
+    }
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Length', contentLength);
+
+    const CHUNK_SIZE = 1024 * 1024;
+    let offset = start;
+    while (offset <= end) {
+      const limit = Math.min(CHUNK_SIZE, end - offset + 1);
+      const result = await c.invoke(new Api.upload.GetFile({
+        precise: true,
+        cdn_supported: false,
+        location: new Api.InputDocumentFileLocation({
+          id: doc.id,
+          accessHash: doc.accessHash,
+          fileReference: doc.fileReference,
+          thumbSize: '',
+        }),
+        offset,
+        limit,
+      }));
+      if (!result || !result.bytes || result.bytes.length === 0) break;
+      res.write(result.bytes);
+      offset += result.bytes.length;
+    }
+    res.end();
+  } catch (e) {
+    console.error('STREAM ERROR:', e);
+    if (!res.headersSent) {
+      res.status(500).json({ error: e.message });
+    }
+  }
+});
+
 // ─── Health ─────────────────────────────────────────────────────
 
 app.get('/health', (req, res) => {
@@ -900,7 +1051,7 @@ app.get('/health', (req, res) => {
 app.listen(PORT, () => {
   console.log(`TeleDrive server running on http://localhost:${PORT}`);
   // Warm up client
-  getClient().then(c => {
+  loadClient().then(c => {
     console.log('Telegram client initialized');
     c.checkAuthorization().then(a => console.log('Auth status:', a ? 'authenticated' : 'not authenticated'));
   }).catch(e => console.error('Failed to init client:', e.message));

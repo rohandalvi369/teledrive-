@@ -1,30 +1,73 @@
+@import "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap";
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --color-surface: #fff;
-  --color-surface-secondary: #fafafa;
-  --color-surface-tertiary: #f4f4f5;
-  --color-text: #18181b;
-  --color-text-secondary: #52525b;
-  --color-text-tertiary: #a1a1aa;
-  --color-border: #e4e4e7;
-  --color-border-hover: #d4d4d8;
-  --color-accent: #4f46e5;
-  --color-accent-hover: #4338ca;
-  --color-accent-light: #eef2ff;
+  --color-surface: #F0EAD6;
+  --color-surface-secondary: #ffffff;
+  --color-surface-tertiary: #e8e0cc;
+  --color-text: #222222;
+  --color-text-secondary: #5c5c5c;
+  --color-text-tertiary: #8a8a8a;
+  --color-border: #d5ccb8;
+  --color-border-hover: #cbc2ad;
+  --color-accent: #24A1DE;
+  --color-accent-hover: #1e8fc7;
+  --color-accent-light: #e8f4fc;
+  --grid-bg: #F0EAD6;
+  --color-header-bg: #ffffff;
+  --color-sidebar-bg: #e8e0cc;
+  --color-card-bg: #ffffff;
+  --color-input-bg: #f5efe0;
+  --color-modal-bg: #ffffff;
+  --color-accent-text: #ffffff;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 .dark {
-  --color-surface: #09090b;
-  --color-surface-secondary: #18181b;
-  --color-surface-tertiary: #27272a;
+  --color-surface: #000000;
+  --color-surface-secondary: #1a1a1a;
+  --color-surface-tertiary: #111111;
   --color-text: #f4f4f5;
   --color-text-secondary: #a1a1aa;
   --color-text-tertiary: #71717a;
-  --color-border: #27272a;
-  --color-border-hover: #3f3f46;
-  --color-accent: #6366f1;
-  --color-accent-hover: #4f46e5;
+  --color-border: #2a2a2a;
+  --color-border-hover: #3a3a3a;
+  --color-accent: #6c63ff;
+  --color-accent-hover: #5a52e0;
   --color-accent-light: #1e1b4b;
+  --grid-bg: #000000;
+  --color-header-bg: #111111;
+  --color-sidebar-bg: #111111;
+  --color-card-bg: #1a1a1a;
+  --color-input-bg: #1a1a1a;
+  --color-modal-bg: #1a1a1a;
+  --color-accent-text: #ffffff;
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-hover);
 }

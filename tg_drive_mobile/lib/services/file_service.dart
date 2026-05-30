@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:handy_tdlib/handy_tdlib.dart';
 import '../models/drive_folder.dart';
@@ -101,114 +100,80 @@ class FileService extends ChangeNotifier {
       _folders = folders;
       if (_activeFolder == null && folders.isNotEmpty) {
         _activeFolder = folders.first;
-        fetchFiles(_activeFolder!);
+        await fetchFiles(_activeFolder!);
+        _loading = false;
+        notifyListeners();
         return;
       }
     } catch (e) {
       _error = e.toString();
-    } finally {
-      _loading = false;
-      notifyListeners();
     }
+    _loading = false;
+    notifyListeners();
   }
 
   Future<void> fetchFiles(DriveFolder folder) async {
     _loading = true;
     _error = null;
     _activeFolder = folder;
+    _files = [];
     notifyListeners();
 
     try {
       final chatId = folder.chatId;
       if (chatId == null) {
-        _files = [];
+        _loading = false;
+        notifyListeners();
         return;
       }
 
-      final resp = await _telegram.execute(
-        SearchChatMessages(
-          chatId: chatId,
-          query: '',
-          senderId: null,
-          fromMessageId: 0,
-          offset: 0,
-          limit: 100,
+      final results = await Future.wait([
+        _telegram.execute(SearchChatMessages(
+          chatId: chatId, query: '', senderId: null,
+          fromMessageId: 0, offset: 0, limit: 100,
           filter: SearchMessagesFilterDocument(),
-          messageThreadId: 0,
-          savedMessagesTopicId: 0,
-        ),
-      );
-
-      final found = FoundChatMessages.fromJson(resp);
-      final files = <DriveFile>[];
-
-      for (final msg in found.messages) {
-        final file = _messageToFile(msg);
-        if (file != null) files.add(file);
-      }
-
-      final photoResp = await _telegram.execute(
-        SearchChatMessages(
-          chatId: chatId,
-          query: '',
-          senderId: null,
-          fromMessageId: 0,
-          offset: 0,
-          limit: 100,
+          messageThreadId: 0, savedMessagesTopicId: 0,
+        )),
+        _telegram.execute(SearchChatMessages(
+          chatId: chatId, query: '', senderId: null,
+          fromMessageId: 0, offset: 0, limit: 100,
           filter: SearchMessagesFilterPhoto(),
-          messageThreadId: 0,
-          savedMessagesTopicId: 0,
-        ),
-      );
-
-      final photoFound = FoundChatMessages.fromJson(photoResp);
-      for (final msg in photoFound.messages) {
-        final file = _messageToFile(msg);
-        if (file != null) files.add(file);
-      }
-
-      final videoResp = await _telegram.execute(
-        SearchChatMessages(
-          chatId: chatId,
-          query: '',
-          senderId: null,
-          fromMessageId: 0,
-          offset: 0,
-          limit: 100,
+          messageThreadId: 0, savedMessagesTopicId: 0,
+        )),
+        _telegram.execute(SearchChatMessages(
+          chatId: chatId, query: '', senderId: null,
+          fromMessageId: 0, offset: 0, limit: 100,
           filter: SearchMessagesFilterVideo(),
-          messageThreadId: 0,
-          savedMessagesTopicId: 0,
-        ),
-      );
-
-      final videoFound = FoundChatMessages.fromJson(videoResp);
-      for (final msg in videoFound.messages) {
-        final file = _messageToFile(msg);
-        if (file != null) files.add(file);
-      }
-
-      final audioResp = await _telegram.execute(
-        SearchChatMessages(
-          chatId: chatId,
-          query: '',
-          senderId: null,
-          fromMessageId: 0,
-          offset: 0,
-          limit: 100,
+          messageThreadId: 0, savedMessagesTopicId: 0,
+        )),
+        _telegram.execute(SearchChatMessages(
+          chatId: chatId, query: '', senderId: null,
+          fromMessageId: 0, offset: 0, limit: 100,
           filter: SearchMessagesFilterAudio(),
-          messageThreadId: 0,
-          savedMessagesTopicId: 0,
-        ),
-      );
+          messageThreadId: 0, savedMessagesTopicId: 0,
+        )),
+        _telegram.execute(SearchChatMessages(
+          chatId: chatId, query: '', senderId: null,
+          fromMessageId: 0, offset: 0, limit: 100,
+          filter: SearchMessagesFilterEmpty(),
+          messageThreadId: 0, savedMessagesTopicId: 0,
+        )),
+      ]);
 
-      final audioFound = FoundChatMessages.fromJson(audioResp);
-      for (final msg in audioFound.messages) {
-        final file = _messageToFile(msg);
-        if (file != null) files.add(file);
+      final allFiles = <DriveFile>[];
+      for (final resp in results) {
+        final found = FoundChatMessages.fromJson(resp);
+        for (final msg in found.messages) {
+          final file = _messageToFile(msg);
+          if (file != null) allFiles.add(file);
+        }
       }
 
-      files.sort((a, b) => b.date.compareTo(a.date));
-      _files = files;
+      final seen = <int>{};
+      _files = allFiles.where((f) => seen.add(f.messageId)).toList();
+
+      _files.sort((a, b) => b.date.compareTo(a.date));
+      debugPrint('fetchFiles: ${_files.length} files loaded for ${folder.title}');
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -302,31 +267,17 @@ class FileService extends ChangeNotifier {
       final fileName = filePath.split('/').last;
       _telegram.startUploadTracking(fileName);
 
-      await _telegram.execute(
-        SendMessage(
-          chatId: chatId,
-          messageThreadId: 0,
-          replyTo: null,
-          options: MessageSendOptions(
-            disableNotification: false,
-            fromBackground: false,
-            protectContent: false,
-            updateOrderOfInstalledStickerSets: false,
-            schedulingState: null,
-            effectId: 0,
-            sendingId: 0,
-            onlyPreview: false,
-          ),
-          replyMarkup: null,
-          inputMessageContent: InputMessageDocument(
-            document: InputFileLocal(path: filePath),
-            thumbnail: null,
-            disableContentTypeDetection: false,
-            caption: null,
-          ),
+      await _telegram.sendMessageAndWait(
+        chatId,
+        InputMessageDocument(
+          document: InputFileLocal(path: filePath),
+          thumbnail: null,
+          disableContentTypeDetection: false,
+          caption: null,
         ),
       );
 
+      _telegram.stopUploadTracking();
       await fetchFiles(folder);
     } catch (e) {
       _error = e.toString();

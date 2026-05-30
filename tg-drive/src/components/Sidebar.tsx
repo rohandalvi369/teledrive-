@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import type { DriveFolder } from '@/lib/telegram'
 import ContextMenu, { type MenuItem } from './ContextMenu'
 
@@ -12,17 +12,48 @@ interface Props {
   onRenameFolder: (folder: DriveFolder, newTitle: string) => Promise<void>
   onDeleteFolder: (folder: DriveFolder) => Promise<void>
   onTrashClick: () => void
-  onFavoritesClick: () => void
   onRecentsClick?: () => void
+  onFileDrop?: (targetFolder: DriveFolder, copy: boolean) => void
+  onTrashDrop?: () => void
+  onShowPrivacy?: () => void
+  onFolderDragHover?: (folder: DriveFolder) => void
 }
 
-export default function Sidebar({ folders, activeId, onSelect, collapsed, onToggle, onNewFolder, onRenameFolder, onDeleteFolder, onTrashClick, onFavoritesClick, onRecentsClick }: Props) {
+export default function Sidebar({ folders, activeId, onSelect, collapsed, onToggle, onNewFolder, onRenameFolder, onDeleteFolder, onTrashClick, onRecentsClick, onFileDrop, onTrashDrop, onShowPrivacy, onFolderDragHover }: Props) {
   const [creating, setCreating] = useState(false)
   const [newTitle, setNewTitle] = useState('')
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; folder: DriveFolder } | null>(null)
   const [renaming, setRenaming] = useState<DriveFolder | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const [dragOverTrash, setDragOverTrash] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const dragHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const dragHoverFolderRef = useRef<DriveFolder | null>(null)
+
+  const clearDragHoverTimer = useCallback(() => {
+    if (dragHoverTimerRef.current !== null) {
+      clearTimeout(dragHoverTimerRef.current)
+      dragHoverTimerRef.current = null
+    }
+    dragHoverFolderRef.current = null
+  }, [])
+
+  const startDragHoverTimer = useCallback((folder: DriveFolder) => {
+    clearDragHoverTimer()
+    dragHoverFolderRef.current = folder
+    dragHoverTimerRef.current = setTimeout(() => {
+      if (dragHoverFolderRef.current && dragHoverFolderRef.current.id !== activeId) {
+        onFolderDragHover?.(dragHoverFolderRef.current)
+      }
+    }, 500)
+  }, [activeId, onFolderDragHover])
+
+  useEffect(() => {
+    const onDragEnd = () => clearDragHoverTimer()
+    document.addEventListener('dragend', onDragEnd)
+    return () => document.removeEventListener('dragend', onDragEnd)
+  }, [clearDragHoverTimer])
 
   const handleCreate = async () => {
     const title = newTitle.trim()
@@ -61,21 +92,44 @@ export default function Sidebar({ folders, activeId, onSelect, collapsed, onTogg
 
   const sectionHeader = (title: string) => (
     <div className="px-3 mt-3 mb-1">
-      <span className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">{title}</span>
+      <span className="text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--color-text-tertiary)' }}>{title}</span>
     </div>
+  )
+
+  const navItem = (isActive: boolean, onClick: () => void, icon: string, label: string, activeBorderColor: string) => (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-3 px-3 py-2 text-sm transition-all duration-150 border-l-2 ${
+        collapsed ? 'justify-center px-0' : ''
+      }`}
+      style={{
+        background: isActive ? 'color-mix(in srgb, var(--color-accent) 10%, transparent)' : undefined,
+        color: isActive ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+        borderLeftColor: isActive ? activeBorderColor : 'transparent',
+      }}
+      onMouseEnter={!isActive ? (e) => { e.currentTarget.style.color = 'var(--color-text)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--color-accent) 5%, transparent)' } : undefined}
+      onMouseLeave={!isActive ? (e) => { e.currentTarget.style.color = 'var(--color-text-tertiary)'; e.currentTarget.style.background = '' } : undefined}
+    >
+      <span className="flex-shrink-0 text-base leading-none">{icon}</span>
+      {!collapsed && <span className="truncate text-left flex-1 min-w-0">{label}</span>}
+    </button>
   )
 
   return (
     <aside
-      className={`border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex flex-col transition-all duration-200 ${
+      className={`border-r flex flex-col transition-all duration-200 ${
         collapsed ? 'w-12' : 'w-56'
       }`}
+      style={{ background: 'var(--color-sidebar-bg)', borderRightColor: 'var(--color-border)' }}
     >
-      <div className="flex items-center justify-between px-3 h-12 border-b border-zinc-200 dark:border-zinc-800 flex-shrink-0">
-        {!collapsed && <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">tg-drive</span>}
+      <div className="flex items-center justify-between px-3 h-12 border-b flex-shrink-0" style={{ borderColor: 'var(--color-border)' }}>
+        {!collapsed && <span className="text-[10px] font-semibold uppercase tracking-[0.15em]" style={{ color: 'var(--color-text-tertiary)' }}>TG-DRIVE</span>}
         <button
           onClick={onToggle}
-          className="text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors p-1"
+          className="transition-colors p-1"
+          style={{ color: 'var(--color-text-tertiary)' }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text)')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-tertiary)')}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -88,31 +142,54 @@ export default function Sidebar({ folders, activeId, onSelect, collapsed, onTogg
         </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-1 scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700">
-        {!collapsed && sectionHeader('Home')}
+      <nav className="flex-1 overflow-y-auto py-1 scrollbar-thin">
+        {!collapsed && sectionHeader('HOME')}
         {folders.map((folder) => {
           const isActive = folder.id === activeId
           const isSaved = folder.type === 'saved'
+          const isDragOver = dragOverId === folder.id
+          const icon = isSaved ? '💾' : '📁'
           return (
             <button
               key={folder.id}
               onClick={() => onSelect(folder)}
               onContextMenu={(e) => handleContextMenu(e, folder)}
+              onDragEnter={(e) => { e.preventDefault(); setDragOverId(folder.id); startDragHoverTimer(folder) }}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  setDragOverId(prev => prev === folder.id ? null : prev)
+                  clearDragHoverTimer()
+                }
+              }}
+              onDragOver={(e) => {
+                e.preventDefault()
+                e.dataTransfer.dropEffect = e.ctrlKey ? 'copy' : 'move'
+              }}
+              onDrop={(e) => {
+                e.preventDefault()
+                setDragOverId(null)
+                clearDragHoverTimer()
+                onFileDrop?.(folder, e.ctrlKey)
+              }}
               title={collapsed ? folder.title : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors ${
-                isActive
-                  ? 'bg-indigo-50 dark:bg-indigo-600/15 text-indigo-600 dark:text-indigo-300 border-r-2 border-indigo-500'
-                  : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/50'
-              } ${collapsed ? 'justify-center px-0' : ''}`}
+              className={`w-full flex items-center gap-3 px-3 py-2 text-sm transition-all duration-150 border-l-2 ${
+                collapsed ? 'justify-center px-0' : ''
+              }`}
+              style={{
+                background: isActive ? 'color-mix(in srgb, var(--color-accent) 10%, transparent)' : isDragOver ? 'color-mix(in srgb, var(--color-accent) 15%, transparent)' : undefined,
+                color: isActive ? 'var(--color-accent)' : isDragOver ? 'var(--color-text)' : 'var(--color-text-tertiary)',
+                borderLeftColor: isActive || isDragOver ? 'var(--color-accent)' : 'transparent',
+              }}
+              onMouseEnter={!isActive && !isDragOver ? (e) => { e.currentTarget.style.color = 'var(--color-text)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--color-accent) 5%, transparent)' } : undefined}
+              onMouseLeave={!isActive && !isDragOver ? (e) => { e.currentTarget.style.color = 'var(--color-text-tertiary)'; e.currentTarget.style.background = '' } : undefined}
             >
-              <span className="flex-shrink-0 text-lg leading-none">
-                {isSaved ? '💾' : '📁'}
-              </span>
+              <span className="flex-shrink-0 text-base leading-none">{icon}</span>
               {!collapsed && (
                 <span className="truncate text-left flex-1 min-w-0">{folder.title}</span>
               )}
               {!collapsed && folder.unreadCount ? (
-                <span className="text-xs bg-indigo-500 dark:bg-indigo-600 text-white rounded-full px-1.5 py-0.5 min-w-5 text-center">
+                <span className="text-[10px] rounded-full px-1.5 py-0.5 min-w-4 text-center leading-none"
+                  style={{ background: 'var(--color-accent)', color: '#fff' }}>
                   {folder.unreadCount > 99 ? '99+' : folder.unreadCount}
                 </span>
               ) : null}
@@ -130,13 +207,23 @@ export default function Sidebar({ folders, activeId, onSelect, collapsed, onTogg
                   onChange={(e) => setNewTitle(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setCreating(false) }}
                   placeholder="Folder name"
-                  className="flex-1 px-2 py-1 text-xs rounded bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500"
+                  className="flex-1 px-2 py-1.5 text-xs rounded-lg border focus:outline-none"
+                  style={{
+                    background: 'var(--color-input-bg)',
+                    borderColor: 'var(--color-border)',
+                    color: 'var(--color-text)',
+                  }}
+                  onFocus={(e) => { e.target.style.borderColor = 'var(--color-accent)' }}
+                  onBlur={(e) => { e.target.style.borderColor = 'var(--color-border)' }}
                   autoFocus
                 />
                 <button
                   onClick={handleCreate}
                   disabled={!newTitle.trim()}
-                  className="px-2 py-1 text-xs rounded bg-indigo-500 dark:bg-indigo-600 text-white hover:bg-indigo-400 dark:hover:bg-indigo-500 disabled:opacity-50 transition-colors"
+                  className="px-2 py-1.5 text-xs rounded-lg disabled:opacity-40 transition-colors leading-none"
+                  style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text, #fff)' }}
+                  onMouseEnter={(e) => !e.currentTarget.disabled && (e.currentTarget.style.filter = 'brightness(0.9)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.filter = '')}
                 >
                   ok
                 </button>
@@ -144,7 +231,13 @@ export default function Sidebar({ folders, activeId, onSelect, collapsed, onTogg
             ) : (
               <button
                 onClick={() => setCreating(true)}
-                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 rounded-lg transition-colors"
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-lg border border-dashed transition-all"
+                style={{
+                  color: 'var(--color-text-tertiary)',
+                  borderColor: 'var(--color-border)',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-text)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--color-accent) 5%, transparent)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-tertiary)'; e.currentTarget.style.background = '' }}
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -156,49 +249,64 @@ export default function Sidebar({ folders, activeId, onSelect, collapsed, onTogg
         )}
 
         {!collapsed && folders.length <= 1 && (
-          <p className="px-3 mt-2 text-xs text-zinc-400 dark:text-zinc-600">No channels yet</p>
+          <p className="px-3 mt-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>No channels yet</p>
         )}
 
-        <div className="border-t border-zinc-200 dark:border-zinc-800 mx-3 my-2" />
+        <div className="border-t mx-3 my-2" style={{ borderColor: 'var(--color-border)' }} />
 
-        {!collapsed && sectionHeader('Quick Links')}
-        <button
-          onClick={() => onRecentsClick?.()}
-          title={collapsed ? 'Recents' : undefined}
-          className={`w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors ${
-            activeId === 'recents'
-              ? 'bg-sky-50 dark:bg-sky-900/15 text-sky-600 dark:text-sky-300 border-r-2 border-sky-500'
-              : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/50'
-          } ${collapsed ? 'justify-center px-0' : ''}`}
-        >
-          <span className="text-lg leading-none">🕐</span>
-          {!collapsed && <span className="truncate text-left flex-1 min-w-0">Recents</span>}
-        </button>
-        <button
-          onClick={onFavoritesClick}
-          title={collapsed ? 'Favorites' : undefined}
-          className={`w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors ${
-            activeId === 'favorites'
-              ? 'bg-amber-50 dark:bg-amber-900/15 text-amber-600 dark:text-amber-300 border-r-2 border-amber-500'
-              : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/50'
-          } ${collapsed ? 'justify-center px-0' : ''}`}
-        >
-          <span className="text-lg leading-none">⭐</span>
-          {!collapsed && <span className="truncate text-left flex-1 min-w-0">Favorites</span>}
-        </button>
-        <button
-          onClick={onTrashClick}
-          title={collapsed ? 'Trash' : undefined}
-          className={`w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors ${
-            activeId === 'trash'
-              ? 'bg-red-50 dark:bg-red-900/15 text-red-600 dark:text-red-300 border-r-2 border-red-500'
-              : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/50'
-          } ${collapsed ? 'justify-center px-0' : ''}`}
-        >
-          <span className="text-lg leading-none">🗑️</span>
-          {!collapsed && <span className="truncate text-left flex-1 min-w-0">Trash</span>}
-        </button>
+        {!collapsed && sectionHeader('QUICK LINKS')}
+        {navItem(activeId === 'recents', () => onRecentsClick?.(), '🕐', 'Recents', 'border-sky-500')}
+        {(() => {
+          const isActive = activeId === 'trash'
+          return (
+            <button
+              onClick={onTrashClick}
+              onDragEnter={(e) => { e.preventDefault(); setDragOverTrash(true) }}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  setDragOverTrash(false)
+                }
+              }}
+              onDragOver={(e) => {
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'move'
+              }}
+              onDrop={(e) => {
+                e.preventDefault()
+                setDragOverTrash(false)
+                onTrashDrop?.()
+              }}
+              className={`w-full flex items-center gap-3 px-3 py-2 text-sm transition-all duration-150 border-l-2 ${
+                collapsed ? 'justify-center px-0' : ''
+              }`}
+              style={{
+                background: isActive ? 'color-mix(in srgb, var(--color-accent) 10%, transparent)' : dragOverTrash ? 'rgba(239,68,68,0.15)' : undefined,
+                color: isActive ? 'var(--color-accent)' : dragOverTrash ? '#f87171' : 'var(--color-text-tertiary)',
+                borderLeftColor: isActive || dragOverTrash ? '#ef4444' : 'transparent',
+              }}
+              onMouseEnter={!isActive && !dragOverTrash ? (e) => { e.currentTarget.style.color = 'var(--color-text)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--color-accent) 5%, transparent)' } : undefined}
+              onMouseLeave={!isActive && !dragOverTrash ? (e) => { e.currentTarget.style.color = 'var(--color-text-tertiary)'; e.currentTarget.style.background = '' } : undefined}
+            >
+              <span className="flex-shrink-0 text-base leading-none">🗑️</span>
+              {!collapsed && <span className="truncate text-left flex-1 min-w-0">Trash</span>}
+            </button>
+          )
+        })()}
       </nav>
+
+      {!collapsed && onShowPrivacy && (
+        <div className="border-t px-3 py-2" style={{ borderColor: 'var(--color-border)' }}>
+          <button
+            onClick={onShowPrivacy}
+            className="w-full text-left text-[10px] transition-colors"
+            style={{ color: 'var(--color-text-tertiary)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-text)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-tertiary)' }}
+          >
+            Privacy Policy
+          </button>
+        </div>
+      )}
 
       {ctxMenu && (
         <ContextMenu
@@ -211,26 +319,30 @@ export default function Sidebar({ folders, activeId, onSelect, collapsed, onTogg
 
       {renaming && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 dark:bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
           onClick={() => setRenaming(null)}
         >
           <div
-            className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl p-4 w-72 shadow-lg dark:shadow-2xl"
+            className="rounded-xl p-4 w-72 shadow-xl"
+            style={{ background: 'var(--color-modal-bg)', borderColor: 'var(--color-border)' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-sm text-zinc-700 dark:text-zinc-300 mb-3">Rename folder</p>
+            <p className="text-sm mb-3" style={{ color: 'var(--color-text)' }}>Rename folder</p>
             <input
               ref={inputRef}
               type="text"
               value={renameValue}
               onChange={(e) => setRenameValue(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleRenameSubmit(); if (e.key === 'Escape') setRenaming(null) }}
-              className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 text-sm focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500"
+              className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
+              style={{ background: 'var(--color-input-bg)', borderColor: 'var(--color-border)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+              onFocus={(e) => { e.target.style.borderColor = 'var(--color-accent)' }}
+              onBlur={(e) => { e.target.style.borderColor = 'var(--color-border)' }}
               autoFocus
             />
             <div className="flex justify-end gap-2 mt-3">
-              <button onClick={() => setRenaming(null)} className="px-3 py-1.5 text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors">Cancel</button>
-              <button onClick={handleRenameSubmit} disabled={!renameValue.trim()} className="px-3 py-1.5 text-xs rounded-lg bg-indigo-500 dark:bg-indigo-600 text-white hover:bg-indigo-400 dark:hover:bg-indigo-500 disabled:opacity-50 transition-colors">Save</button>
+              <button onClick={() => setRenaming(null)} className="px-3 py-1.5 text-xs transition-colors" style={{ color: 'var(--color-text-tertiary)' }}>Cancel</button>
+              <button onClick={handleRenameSubmit} disabled={!renameValue.trim()} className="px-3 py-1.5 text-xs rounded-lg disabled:opacity-40 transition-colors" style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text, #fff)' }}>Save</button>
             </div>
           </div>
         </div>

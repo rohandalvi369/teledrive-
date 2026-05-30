@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teledrive/main.dart';
-import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('App smoke test', (tester) async {

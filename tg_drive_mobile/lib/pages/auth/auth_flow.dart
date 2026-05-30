@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../services/telegram_service.dart';
+import '../../theme/app_theme.dart';
 import 'phone_page.dart';
 import 'code_page.dart';
 import 'password_page.dart';
@@ -49,37 +52,49 @@ class _AuthFlowState extends State<AuthFlow> {
   }
 
   Widget _buildLoading(BuildContext context, TelegramService telegram) {
-    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
+      backgroundColor: AppColors.bg,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.cloud_outlined, size: 64, color: theme.colorScheme.primary),
+            Container(
+              width: 100, height: 100,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.1),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(color: AppColors.primaryGlow, blurRadius: 40, spreadRadius: 5),
+                ],
+              ),
+              child: const Icon(Icons.cloud, size: 48, color: AppColors.primary),
+            ).animate().shake(duration: 2000.ms).then().shimmer(duration: 2000.ms, color: AppColors.primary.withOpacity(0.1)),
             const SizedBox(height: 24),
             Text('TeleDrive',
-                style: theme.textTheme.headlineSmall
-                    ?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 24),
-            const CircularProgressIndicator(),
+                style: GoogleFonts.inter(fontSize: 32, fontWeight: FontWeight.w600, color: Colors.white)),
+            const SizedBox(height: 8),
+            Text('Your Telegram Cloud',
+                style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary)),
+            const SizedBox(height: 40),
+            const SizedBox(width: 28, height: 28,
+              child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.primary)),
             const SizedBox(height: 16),
             Text('Initializing...',
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
             if (telegram.error != null) ...[
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
                 margin: const EdgeInsets.symmetric(horizontal: 32),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.errorContainer,
+                  color: AppColors.error.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.error.withOpacity(0.3)),
                 ),
                 child: Text(
                   telegram.error!,
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: theme.colorScheme.onErrorContainer),
+                  style: GoogleFonts.inter(fontSize: 13, color: AppColors.error),
                 ),
               ),
             ],
@@ -90,22 +105,43 @@ class _AuthFlowState extends State<AuthFlow> {
   }
 
   Widget _buildReconnect(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
+      backgroundColor: AppColors.bg,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.cloud_off, size: 64, color: theme.colorScheme.error),
+            Container(
+              width: 100, height: 100,
+              decoration: BoxDecoration(
+                color: AppColors.error.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.cloud_off, size: 48, color: AppColors.error),
+            ),
             const SizedBox(height: 24),
-            Text('Disconnected', style: theme.textTheme.headlineSmall),
+            Text('Disconnected',
+                style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w600, color: Colors.white)),
             const SizedBox(height: 16),
-            FilledButton.tonal(
-              onPressed: () {
-                context.read<TelegramService>().initialize();
-              },
-              child: const Text('Reconnect'),
+            Container(
+              height: 52,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => context.read<TelegramService>().initialize(),
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Text('Reconnect', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w500, color: AppColors.primary)),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),

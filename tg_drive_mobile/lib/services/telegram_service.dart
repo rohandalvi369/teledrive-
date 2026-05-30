@@ -9,11 +9,14 @@ import 'tdlib_isolate.dart';
 enum AuthStep { initializing, phone, code, password, ready, closed }
 
 class TelegramService extends ChangeNotifier {
+  static TelegramService? _instance;
+  static TelegramService get instance => _instance!;
+
   static const int _kApiId = 33624340;
   static const String _kApiHash = 'e91bb3030342033d159f40937522b046';
 
   TdlibIsolate? _tdlib;
-  bool _receiving = false;
+  bool _initialized = false;
 
   AuthStep _currentStep = AuthStep.initializing;
   AuthStep get currentStep => _currentStep;
@@ -32,6 +35,8 @@ class TelegramService extends ChangeNotifier {
   int _requestCounter = 0;
   final Map<String, Completer<Map<String, dynamic>>> _pendingRequests = {};
 
+  final Map<String, Completer<void>> _pendingSendConfirmations = {};
+
   double _uploadProgress = 0;
   double get uploadProgress => _uploadProgress;
   bool _isUploading = false;
@@ -49,19 +54,27 @@ class TelegramService extends ChangeNotifier {
 
   StreamSubscription<Map<String, dynamic>>? _updateSub;
 
+  TelegramService() {
+    _instance = this;
+  }
+
   void clearError() {
     _error = null;
     notifyListeners();
   }
 
   Future<void> initialize() async {
+    if (_initialized) return;
     _currentStep = AuthStep.initializing;
     _loading = true;
     notifyListeners();
 
     try {
       _updateSub?.cancel();
-      _tdlib?.dispose();
+      if (_tdlib != null) {
+        try { _tdlib!.dispose(); } catch (_) {}
+        _tdlib = null;
+      }
 
       final dir = await getApplicationDocumentsDirectory();
       final dbPath = '${dir.path}/tdlib';
@@ -71,13 +84,30 @@ class TelegramService extends ChangeNotifier {
 
       _updateSub = _tdlib!.updates.listen(_processUpdate);
 
-      await _tdlib!.start(
-        apiId: _kApiId,
-        apiHash: _kApiHash,
-        databasePath: dbPath,
-      );
+      try {
+        await _tdlib!.start(
+          apiId: _kApiId,
+          apiHash: _kApiHash,
+          databasePath: dbPath,
+        );
+      } catch (e) {
+        final msg = e.toString();
+        if (msg.contains('already in use') || msg.contains('td.binlog') || msg.contains('400')) {
+          // Lock file issue — dispose and recreate once
+          try { _tdlib!.dispose(); } catch (_) {}
+          _tdlib = TdlibIsolate();
+          _updateSub = _tdlib!.updates.listen(_processUpdate);
+          await _tdlib!.start(
+            apiId: _kApiId,
+            apiHash: _kApiHash,
+            databasePath: dbPath,
+          );
+        } else {
+          rethrow;
+        }
+      }
 
-      _receiving = true;
+      _initialized = true;
       _loading = false;
       notifyListeners();
     } catch (e) {
@@ -129,6 +159,44 @@ class TelegramService extends ChangeNotifier {
 
   void _sendJson(Map<String, dynamic> request) {
     _tdlib?.sendRaw(request);
+  }
+
+  Future<Map<String, dynamic>> sendMessageAndWait(
+    int chatId,
+    InputMessageContent content,
+  ) async {
+    final resp = await execute(
+      SendMessage(
+        chatId: chatId,
+        messageThreadId: 0,
+        replyTo: null,
+        options: const MessageSendOptions(
+          disableNotification: false,
+          fromBackground: false,
+          protectContent: false,
+          updateOrderOfInstalledStickerSets: false,
+          schedulingState: null,
+          effectId: 0,
+          sendingId: 0,
+          onlyPreview: false,
+        ),
+        replyMarkup: null,
+        inputMessageContent: content,
+      ),
+    );
+
+    final tempId = resp['id'] as int?;
+    if (tempId != null && tempId > 0) {
+      final completer = Completer<void>();
+      _pendingSendConfirmations['$chatId:$tempId'] = completer;
+      try {
+        await completer.future.timeout(const Duration(seconds: 30));
+      } on TimeoutException {
+        _pendingSendConfirmations.remove('$chatId:$tempId');
+      }
+    }
+
+    return resp;
   }
 
   Future<Map<String, dynamic>> execute(TdFunction function) async {
@@ -197,7 +265,20 @@ class TelegramService extends ChangeNotifier {
             notifyListeners();
           }
         }
-      } else if (type == 'error') {
+        } else if (type == 'updateMessageSendSucceeded') {
+          final msg = json['message'] as Map<String, dynamic>?;
+          if (msg != null) {
+            final chatId = msg['chat_id'] as int?;
+            final oldMsgId = json['old_message_id'] as int?;
+            if (chatId != null && oldMsgId != null && oldMsgId > 0) {
+              final key = '$chatId:$oldMsgId';
+              final completer = _pendingSendConfirmations.remove(key);
+              if (completer != null && !completer.isCompleted) {
+                completer.complete();
+              }
+            }
+          }
+        } else if (type == 'error') {
         final err = object as TdError;
         final message = err.message;
         final code = err.code;
@@ -274,7 +355,7 @@ class TelegramService extends ChangeNotifier {
         break;
       case AuthorizationStateClosed():
         _currentStep = AuthStep.closed;
-        _receiving = false;
+        _initialized = false;
         notifyListeners();
         break;
       case AuthorizationStateLoggingOut():
@@ -319,7 +400,7 @@ class TelegramService extends ChangeNotifier {
   Future<void> close() async {
     _updateSub?.cancel();
     _tdlib?.dispose();
-    _receiving = false;
+    _initialized = false;
   }
 
   @override

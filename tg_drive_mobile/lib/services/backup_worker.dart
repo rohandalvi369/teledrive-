@@ -210,7 +210,7 @@ void backupCallbackDispatcher() {
           totalFolders: totalFoldersProcessed,
         );
       } else if (lastError != null) {
-        await notif.showError(lastError!);
+        await notif.showError(lastError);
       } else {
         await notif.cancelAll();
       }

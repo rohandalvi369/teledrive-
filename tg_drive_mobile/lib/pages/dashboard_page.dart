@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:open_filex/open_filex.dart';
@@ -9,21 +11,22 @@ import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 import '../services/telegram_service.dart';
 import '../services/file_service.dart';
-import '../services/theme_service.dart';
 import '../services/api_service.dart';
 import '../services/trash_service.dart';
 import '../services/favorites_service.dart';
 import '../models/drive_folder.dart';
 import '../models/drive_file.dart';
 import '../widgets/shimmer_list.dart';
+import '../theme/app_theme.dart';
 import 'image_preview_page.dart';
 import 'video_preview_page.dart';
 import 'audio_preview_page.dart';
 import 'pdf_viewer_page.dart';
 import 'backup_setup_page.dart';
 import 'trash_page.dart';
+import 'settings_page.dart';
 
-enum _SortMode { newest, oldest, largest, smallest, nameAZ }
+enum _SortMode { defaultOrder, newest, oldest, largest, smallest, nameAZ, nameZA }
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -38,6 +41,8 @@ class _DashboardPageState extends State<DashboardPage>
   String _searchQuery = '';
   late TabController _tabController;
   _SortMode _sortMode = _SortMode.newest;
+  final _scrollController = ScrollController();
+  bool _isScrolledDown = false;
 
   bool _multiSelectMode = false;
   final Set<DriveFile> _selectedFiles = {};
@@ -50,6 +55,10 @@ class _DashboardPageState extends State<DashboardPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 7, vsync: this);
+    _scrollController.addListener(() {
+      final scrolled = _scrollController.offset > 20;
+      if (scrolled != _isScrolledDown) setState(() => _isScrolledDown = scrolled);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final fs = context.read<FileService>();
       fs.fetchFolders();
@@ -63,8 +72,11 @@ class _DashboardPageState extends State<DashboardPage>
   void dispose() {
     _searchController.dispose();
     _tabController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
+
+  // ─── Data Loading ──────────────────────────────────────────────
 
   Future<void> _loadStats() async {
     try {
@@ -105,6 +117,8 @@ class _DashboardPageState extends State<DashboardPage>
     } catch (_) {}
   }
 
+  // ─── Multi Select ──────────────────────────────────────────────
+
   void _exitMultiSelect() {
     setState(() {
       _multiSelectMode = false;
@@ -139,18 +153,16 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   List<DriveFile> _applySort(List<DriveFile> files) {
+    if (_sortMode == _SortMode.defaultOrder) return files;
     final sorted = List<DriveFile>.from(files);
     switch (_sortMode) {
-      case _SortMode.newest:
-        sorted.sort((a, b) => b.date.compareTo(a.date));
-      case _SortMode.oldest:
-        sorted.sort((a, b) => a.date.compareTo(b.date));
-      case _SortMode.largest:
-        sorted.sort((a, b) => b.size.compareTo(a.size));
-      case _SortMode.smallest:
-        sorted.sort((a, b) => a.size.compareTo(b.size));
-      case _SortMode.nameAZ:
-        sorted.sort((a, b) => a.fileName.compareTo(b.fileName));
+      case _SortMode.defaultOrder: break;
+      case _SortMode.newest: sorted.sort((a, b) => b.date.compareTo(a.date));
+      case _SortMode.oldest: sorted.sort((a, b) => a.date.compareTo(b.date));
+      case _SortMode.largest: sorted.sort((a, b) => b.size.compareTo(a.size));
+      case _SortMode.smallest: sorted.sort((a, b) => a.size.compareTo(b.size));
+      case _SortMode.nameAZ: sorted.sort((a, b) => a.fileName.compareTo(b.fileName));
+      case _SortMode.nameZA: sorted.sort((a, b) => b.fileName.compareTo(a.fileName));
     }
     return sorted;
   }
@@ -181,36 +193,40 @@ class _DashboardPageState extends State<DashboardPage>
     if (result.files.length == 1) {
       final path = await _copyToTemp(result.files.first);
       if (!mounted) return;
-      _showUploadProgress(context, fs, folder, path);
+      await _showUploadProgress(context, fs, folder, path);
+      if (!mounted) return;
+      final curFolder = fs.activeFolder;
+      if (curFolder != null) await fs.fetchFiles(curFolder);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Upload complete'), duration: Duration(seconds: 2)),
+      );
       return;
     }
-    _showMultiUploadSheet(context, fs, folder, result.files);
+    await _showMultiUploadSheet(context, fs, folder, result.files);
+    if (!mounted) return;
+    final curFolder = fs.activeFolder;
+    if (curFolder != null) await fs.fetchFiles(curFolder);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Upload complete'), duration: Duration(seconds: 2)),
+    );
   }
 
-  void _showMultiUploadSheet(
-    BuildContext ctx,
-    FileService fs,
-    DriveFolder folder,
-    List<PlatformFile> files,
-  ) {
-    showModalBottomSheet(
-      context: ctx,
-      enableDrag: false,
-      isDismissible: false,
+  Future<void> _showMultiUploadSheet(
+    BuildContext ctx, FileService fs, DriveFolder folder, List<PlatformFile> files,
+  ) async {
+    await showModalBottomSheet(
+      context: ctx, enableDrag: false, isDismissible: false,
       builder: (_) => _MultiUploadSheet(fs: fs, folder: folder, files: files),
     );
   }
 
-  void _showUploadProgress(
-    BuildContext ctx,
-    FileService fs,
-    DriveFolder folder,
-    String path,
-  ) {
-    showModalBottomSheet(
-      context: ctx,
-      enableDrag: false,
-      isDismissible: false,
+  Future<void> _showUploadProgress(
+    BuildContext ctx, FileService fs, DriveFolder folder, String path,
+  ) async {
+    await showModalBottomSheet(
+      context: ctx, enableDrag: false, isDismissible: false,
       builder: (_) => _UploadProgressSheet(fs: fs, folder: folder, path: path),
     );
   }
@@ -218,18 +234,13 @@ class _DashboardPageState extends State<DashboardPage>
   // ─── Download / Preview ───────────────────────────────────────
 
   Future<void> _downloadAndPreview(
-    BuildContext ctx,
-    FileService fs,
-    DriveFile file, {
-    List<DriveFile>? imageList,
-    int imageIndex = 0,
+    BuildContext ctx, FileService fs, DriveFile file, {
+    List<DriveFile>? imageList, int imageIndex = 0,
   }) async {
     if (file.isImage && imageList != null && imageList.length > 1) {
       if (!file.isDownloaded) {
         final path = await showModalBottomSheet<String>(
-          context: ctx,
-          enableDrag: false,
-          isDismissible: false,
+          context: ctx, enableDrag: false, isDismissible: false,
           builder: (_) => _DownloadProgressSheet(fs: fs, file: file),
         );
         if (path == null || !mounted) return;
@@ -277,12 +288,13 @@ class _DashboardPageState extends State<DashboardPage>
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
         title: const Text('Move to Trash'),
         content: Text('Move ${_selectedFiles.length} file(s) to trash?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error, foregroundColor: Theme.of(context).colorScheme.onError),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Move to Trash'),
           ),
@@ -314,11 +326,9 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   Future<void> _createZipSelected(FileService fs) async {
-    // Download all selected, zip them, upload back
     for (final file in _selectedFiles) {
       if (!file.isDownloaded) await fs.downloadFile(file);
     }
-    // Use archive package to create zip
     try {
       final archive = await _createZipFromFiles(_selectedFiles.toList());
       if (archive != null && fs.activeFolder != null) {
@@ -335,8 +345,6 @@ class _DashboardPageState extends State<DashboardPage>
     try {
       final dir = Directory.systemTemp.createTempSync('zip_');
       final zipPath = '${dir.path}/archive.zip';
-      // Use dart:io Process to call system zip, or use archive package
-      // For now create a simple zip using archive package
       final archive = Archive();
       for (final file in files) {
         if (file.localPath != null) {
@@ -346,7 +354,6 @@ class _DashboardPageState extends State<DashboardPage>
         }
       }
       final encoded = ZipEncoder().encode(archive);
-      if (encoded == null) return null;
       final zipFile = File(zipPath);
       await zipFile.writeAsBytes(encoded);
       return zipFile;
@@ -379,23 +386,14 @@ class _DashboardPageState extends State<DashboardPage>
           final outFile = File(outPath);
           outFile.parent.createSync(recursive: true);
           await outFile.writeAsBytes(entry.content as List<int>);
-          extracted.add(_ZipEntry(
-            name: entry.name,
-            path: outPath,
-            size: entry.size,
-            isFile: true,
-          ));
+          extracted.add(_ZipEntry(name: entry.name, path: outPath, size: entry.size, isFile: true));
         }
       }
 
       if (!mounted) return;
       showModalBottomSheet(
-        context: ctx,
-        isScrollControlled: true,
-        builder: (_) => _ZipContentSheet(
-          zipFileName: file.fileName,
-          entries: extracted,
-        ),
+        context: ctx, isScrollControlled: true,
+        builder: (_) => _ZipContentSheet(zipFileName: file.fileName, entries: extracted),
       );
     } catch (e) {
       if (mounted) {
@@ -418,6 +416,18 @@ class _DashboardPageState extends State<DashboardPage>
     return '${date.day}/${date.month}/${date.year}';
   }
 
+  String get _sortLabel {
+    switch (_sortMode) {
+      case _SortMode.defaultOrder: return 'Default';
+      case _SortMode.nameAZ: return 'A-Z';
+      case _SortMode.nameZA: return 'Z-A';
+      case _SortMode.newest: return 'Newest';
+      case _SortMode.oldest: return 'Oldest';
+      case _SortMode.largest: return 'Largest';
+      case _SortMode.smallest: return 'Smallest';
+    }
+  }
+
   String _formatDuration(int secs) {
     final min = (secs ~/ 60).toString().padLeft(2, '0');
     final sec = (secs % 60).toString().padLeft(2, '0');
@@ -432,167 +442,362 @@ class _DashboardPageState extends State<DashboardPage>
     final theme = Theme.of(context);
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: _multiSelectMode
-          ? AppBar(
-              leading: IconButton(icon: const Icon(Icons.close), onPressed: _exitMultiSelect),
-              title: Text('${_selectedFiles.length} selected'),
-              actions: [
-                IconButton(icon: const Icon(Icons.download), tooltip: 'Download', onPressed: _selectedFiles.isEmpty ? null : () => _downloadSelected(fs)),
-                IconButton(icon: const Icon(Icons.drive_file_move), tooltip: 'Move', onPressed: _selectedFiles.isEmpty ? null : () => _moveSelected(fs)),
-                IconButton(icon: const Icon(Icons.folder_zip), tooltip: 'Create Zip', onPressed: _selectedFiles.length < 2 ? null : () => _createZipSelected(fs)),
-                IconButton(icon: Icon(Icons.delete, color: theme.colorScheme.error), tooltip: 'Move to Trash', onPressed: _selectedFiles.isEmpty ? null : () => _moveToTrashSelected(fs)),
-              ],
-            )
-          : AppBar(
-              title: Text(fs.activeFolder?.title ?? 'TeleDrive'),
-              actions: [
-                PopupMenuButton<_SortMode>(
-                  icon: const Icon(Icons.sort), tooltip: 'Sort',
-                  onSelected: (v) => setState(() => _sortMode = v),
-                  initialValue: _sortMode,
-                  itemBuilder: (_) => [
-                    PopupMenuItem(value: _SortMode.newest, child: Text('Newest', style: _sortMode == _SortMode.newest ? const TextStyle(fontWeight: FontWeight.bold) : null)),
-                    PopupMenuItem(value: _SortMode.oldest, child: Text('Oldest', style: _sortMode == _SortMode.oldest ? const TextStyle(fontWeight: FontWeight.bold) : null)),
-                    PopupMenuItem(value: _SortMode.largest, child: Text('Largest', style: _sortMode == _SortMode.largest ? const TextStyle(fontWeight: FontWeight.bold) : null)),
-                    PopupMenuItem(value: _SortMode.smallest, child: Text('Smallest', style: _sortMode == _SortMode.smallest ? const TextStyle(fontWeight: FontWeight.bold) : null)),
-                    PopupMenuItem(value: _SortMode.nameAZ, child: Text('Name A-Z', style: _sortMode == _SortMode.nameAZ ? const TextStyle(fontWeight: FontWeight.bold) : null)),
-                  ],
-                ),
-              ],
-              bottom: fs.loading && fs.files.isEmpty ? null
-                  : PreferredSize(
-                      preferredSize: const Size.fromHeight(48),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        child: TextField(
-                          controller: _searchController,
-                          onChanged: (v) => setState(() => _searchQuery = v),
-                          style: const TextStyle(fontSize: 14),
-                          decoration: InputDecoration(
-                            hintText: 'Search files...',
-                            prefixIcon: const Icon(Icons.search, size: 20),
-                            suffixIcon: _searchQuery.isNotEmpty
-                                ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () { _searchController.clear(); setState(() => _searchQuery = ''); })
-                                : null,
-                            filled: true, isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                          ),
-                        ),
-                      ),
-                    ),
-            ),
+          ? _buildMultiSelectAppBar(fs, theme)
+          : _buildGlassAppBar(fs),
       drawer: _buildDrawer(context, fs, theme),
-      body: _buildBody(context, fs, theme),
-      floatingActionButton: _multiSelectMode ? null
-          : FloatingActionButton(onPressed: fs.activeFolder != null ? () => _pickAndUpload(fs) : null, child: const Icon(Icons.upload)),
+      body: SafeArea(child: _buildBody(context, fs, theme)),
+      floatingActionButton: _buildFAB(fs),
+    );
+  }
+
+  PreferredSizeWidget _buildGlassAppBar(FileService fs) {
+    return AppBar(
+      backgroundColor: AppColors.surface.withOpacity(0.8),
+      flexibleSpace: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(color: Colors.transparent),
+        ),
+      ),
+      leading: Builder(
+        builder: (ctx) => IconButton(
+          icon: const Icon(Icons.menu_rounded, color: Colors.white),
+          onPressed: () => Scaffold.of(ctx).openDrawer(),
+        ),
+      ),
+      title: Text(fs.activeFolder?.title ?? 'TeleDrive',
+          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
+          tooltip: 'Refresh',
+          onPressed: () {
+            final folder = fs.activeFolder;
+            if (folder != null) fs.fetchFiles(folder);
+          },
+        ),
+        PopupMenuButton<_SortMode>(
+          icon: const Icon(Icons.sort_rounded, color: AppColors.textSecondary),
+          tooltip: 'Sort',
+          onSelected: (v) => setState(() => _sortMode = v),
+          initialValue: _sortMode,
+          itemBuilder: (_) => [
+            PopupMenuItem(value: _SortMode.defaultOrder, child: Text('Default', style: _sortMode == _SortMode.defaultOrder ? const TextStyle(fontWeight: FontWeight.bold) : null)),
+            PopupMenuItem(value: _SortMode.nameAZ, child: Text('Name A-Z', style: _sortMode == _SortMode.nameAZ ? const TextStyle(fontWeight: FontWeight.bold) : null)),
+            PopupMenuItem(value: _SortMode.nameZA, child: Text('Name Z-A', style: _sortMode == _SortMode.nameZA ? const TextStyle(fontWeight: FontWeight.bold) : null)),
+            PopupMenuItem(value: _SortMode.newest, child: Text('Newest', style: _sortMode == _SortMode.newest ? const TextStyle(fontWeight: FontWeight.bold) : null)),
+            PopupMenuItem(value: _SortMode.oldest, child: Text('Oldest', style: _sortMode == _SortMode.oldest ? const TextStyle(fontWeight: FontWeight.bold) : null)),
+            PopupMenuItem(value: _SortMode.largest, child: Text('Largest', style: _sortMode == _SortMode.largest ? const TextStyle(fontWeight: FontWeight.bold) : null)),
+            PopupMenuItem(value: _SortMode.smallest, child: Text('Smallest', style: _sortMode == _SortMode.smallest ? const TextStyle(fontWeight: FontWeight.bold) : null)),
+          ],
+        ),
+      ],
+      bottom: fs.loading && fs.files.isEmpty ? null
+          : PreferredSize(
+              preferredSize: const Size.fromHeight(52),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceElevated,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (v) => setState(() => _searchQuery = v),
+                    style: GoogleFonts.inter(fontSize: 14, color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Search files...',
+                      prefixIcon: const Icon(Icons.search_rounded, size: 20, color: AppColors.textSecondary),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear_rounded, size: 18, color: AppColors.textSecondary),
+                              onPressed: () { _searchController.clear(); setState(() => _searchQuery = ''); })
+                          : null,
+                      filled: true, fillColor: Colors.transparent, isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
+
+  PreferredSizeWidget _buildMultiSelectAppBar(FileService fs, ThemeData theme) {
+    return AppBar(
+      backgroundColor: AppColors.surface.withOpacity(0.8),
+      flexibleSpace: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(color: Colors.transparent),
+        ),
+      ),
+      leading: IconButton(
+        icon: const Icon(Icons.close_rounded, color: Colors.white),
+        onPressed: _exitMultiSelect,
+      ),
+      title: Text('${_selectedFiles.length} selected',
+          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
+      actions: [
+        IconButton(icon: const Icon(Icons.download_rounded), tooltip: 'Download', color: AppColors.textSecondary,
+          onPressed: _selectedFiles.isEmpty ? null : () => _downloadSelected(fs)),
+        IconButton(icon: const Icon(Icons.drive_file_move_rounded), tooltip: 'Move', color: AppColors.textSecondary,
+          onPressed: _selectedFiles.isEmpty ? null : () => _moveSelected(fs)),
+        IconButton(icon: const Icon(Icons.folder_zip_rounded), tooltip: 'Create Zip', color: AppColors.textSecondary,
+          onPressed: _selectedFiles.length < 2 ? null : () => _createZipSelected(fs)),
+        IconButton(icon: const Icon(Icons.delete_rounded, color: AppColors.error), tooltip: 'Move to Trash',
+          onPressed: _selectedFiles.isEmpty ? null : () => _moveToTrashSelected(fs)),
+      ],
+    );
+  }
+
+  Widget _buildFAB(FileService fs) {
+    final telegram = context.watch<TelegramService>();
+
+    if (telegram.isUploading) {
+      return SizedBox(
+        width: 64, height: 64,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox(
+              width: 64, height: 64,
+              child: CircularProgressIndicator(
+                value: telegram.uploadProgress,
+                strokeWidth: 3,
+                backgroundColor: AppColors.surfaceElevated,
+                valueColor: const AlwaysStoppedAnimation(AppColors.primary),
+              ),
+            ),
+            Container(
+              width: 52, height: 52,
+              decoration: const BoxDecoration(
+                color: AppColors.surfaceElevated,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.cloud_upload_rounded, color: AppColors.primary, size: 24),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+      height: 56,
+      width: _isScrolledDown ? 56 : null,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        gradient: const LinearGradient(colors: [AppColors.gradientStart, AppColors.gradientEnd]),
+        boxShadow: [BoxShadow(color: AppColors.primaryGlow, blurRadius: 24, spreadRadius: 2)],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(28),
+          onTap: fs.activeFolder != null ? () => _pickAndUpload(fs) : null,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: _isScrolledDown ? 14 : 24),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_upload_rounded, color: Colors.white, size: 22),
+                if (!_isScrolledDown) ...[
+                  const SizedBox(width: 8),
+                  Text('Upload', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
   // ─── Drawer ───────────────────────────────────────────────────
 
   Widget _buildDrawer(BuildContext context, FileService fs, ThemeData theme) {
-    final themeService = context.read<ThemeService>();
     final telegram = context.read<TelegramService>();
 
     return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          DrawerHeader(
-            decoration: BoxDecoration(color: theme.colorScheme.primaryContainer),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.end, children: [
-              Icon(Icons.cloud_outlined, size: 48, color: theme.colorScheme.onPrimaryContainer),
-              const SizedBox(height: 8),
-              Text('TeleDrive', style: theme.textTheme.titleLarge),
-            ]),
-          ),
-          // ── Home ──
-          _drawerSectionHeader('Home', theme),
-          ...fs.folders.map((folder) {
-            final isSaved = folder.type == 'saved';
-            return ListTile(
-              leading: Icon(isSaved ? Icons.save : Icons.folder),
-              title: Text(folder.title),
-              selected: fs.activeFolder?.id == folder.id,
-              onTap: () { fs.fetchFiles(folder); Navigator.pop(context); },
-              onLongPress: isSaved ? null : () => _showFolderOptions(context, fs, folder),
-            );
-          }),
-          ListTile(
-            leading: const Icon(Icons.add),
-            title: const Text('New Folder'),
-            onTap: () { Navigator.pop(context); _showCreateFolderDialog(context, fs); },
-          ),
-          const Divider(),
-          // ── Recents ──
-          _drawerSectionHeader('Recents', theme),
-          ListTile(
-            leading: const Icon(Icons.history),
-            title: const Text('Recent Files'),
-            onTap: () { Navigator.pop(context); _tabController.animateTo(6); },
-          ),
-          const Divider(),
-          // ── Favorites ──
-          _drawerSectionHeader('Favorites', theme),
-          ListTile(
-            leading: const Icon(Icons.star, color: Colors.amber),
-            title: const Text('Favorite Files'),
-            onTap: () { Navigator.pop(context); _tabController.animateTo(5); },
-          ),
-          const Divider(),
-          // ── Backups ──
-          _drawerSectionHeader('Backups', theme),
-          ListTile(
-            leading: const Icon(Icons.backup),
-            title: const Text('Auto Backup'),
-            onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => const BackupSetupPage())); },
-          ),
-          const Divider(),
-          // ── Trash ──
-          _drawerSectionHeader('Trash', theme),
-          ListTile(
-            leading: Icon(Icons.delete_outline, color: theme.colorScheme.error),
-            title: Text('Trash', style: TextStyle(color: theme.colorScheme.error)),
-            onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => const TrashPage())); },
-          ),
-          const Divider(),
-          // ── Settings ──
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(children: [
-              const Icon(Icons.palette_outlined),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SegmentedButton<ThemeMode>(
-                  segments: const [
-                    ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode)),
-                    ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode)),
-                    ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.settings_brightness)),
-                  ],
-                  selected: {themeService.themeMode},
-                  onSelectionChanged: (v) => themeService.setThemeMode(v.first),
-                  style: ButtonStyle(visualDensity: VisualDensity.compact, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+      width: MediaQuery.of(context).size.width * 0.8,
+      child: Container(
+        color: AppColors.bg.withOpacity(0.96),
+        child: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 48, 20, 24),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                      colors: [
+                        AppColors.primary.withOpacity(0.1),
+                        AppColors.accent.withOpacity(0.05),
+                      ],
+                    ),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Container(
+                      width: 56, height: 56,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(colors: [AppColors.gradientStart, AppColors.gradientEnd]),
+                        boxShadow: [BoxShadow(color: AppColors.primaryGlow, blurRadius: 16, spreadRadius: 2)],
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.person, color: Colors.white, size: 28),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text('TeleDrive User', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
+                    const SizedBox(height: 2),
+                    Text('Connected', style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
+                  ]),
                 ),
-              ),
-            ]),
+
+                // ── Storage Ring ──
+                if (_stats != null) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    child: _buildStorageRing(theme),
+                  ),
+                  const Divider(indent: 20, endIndent: 20),
+                ],
+
+                // ── Home Section ──
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+                  child: Text('HOME', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 1.2)),
+                ),
+                ...fs.folders.map((folder) {
+                  final isSaved = folder.type == 'saved';
+                  final isActive = fs.activeFolder?.id == folder.id;
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: isActive ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border(
+                        left: BorderSide(color: isActive ? AppColors.primary : Colors.transparent, width: 3),
+                      ),
+                    ),
+                    child: ListTile(
+                      leading: Icon(isSaved ? Icons.save_rounded : Icons.folder_rounded,
+                          color: isActive ? AppColors.primary : AppColors.textSecondary, size: 22),
+                      title: Text(folder.title, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500,
+                          color: isActive ? Colors.white : AppColors.textSecondary)),
+                      dense: true,
+                      onTap: () { fs.fetchFiles(folder); Navigator.pop(context); },
+                      onLongPress: isSaved ? null : () => _showFolderOptions(context, fs, folder),
+                    ),
+                  );
+                }),
+                ListTile(
+                  leading: const Icon(Icons.add_rounded, color: AppColors.primary, size: 22),
+                  title: Text('New Folder', style: GoogleFonts.inter(fontSize: 14, color: AppColors.primary)),
+                  dense: true,
+                  onTap: () { Navigator.pop(context); _showCreateFolderDialog(context, fs); },
+                ),
+
+                const Divider(indent: 20, endIndent: 20),
+
+                // ── Quick Links ──
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+                  child: Text('QUICK LINKS', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 1.2)),
+                ),
+                _drawerItem(Icons.history_rounded, 'Recent Files', () { Navigator.pop(context); _tabController.animateTo(6); }),
+                _drawerItem(Icons.star_rounded, 'Favorites', () { Navigator.pop(context); _tabController.animateTo(5); }),
+                _drawerItem(Icons.backup_rounded, 'Auto Backup', () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => const BackupSetupPage())); }),
+                _drawerItem(Icons.delete_outline_rounded, 'Trash', () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => const TrashPage())); }, color: AppColors.error),
+
+                const Divider(indent: 20, endIndent: 20),
+
+                // ── Settings ──
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+                  child: Text('MORE', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 1.2)),
+                ),
+                _drawerItem(Icons.settings_rounded, 'Settings', () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage())); }),
+                _drawerItem(Icons.logout_rounded, 'Sign out', () { Navigator.pop(context); telegram.logout(); }, color: AppColors.error),
+                const SizedBox(height: 32),
+              ],
+            ),
           ),
-          const Divider(),
-          ListTile(
-            leading: Icon(Icons.logout, color: theme.colorScheme.error),
-            title: Text('Sign out', style: TextStyle(color: theme.colorScheme.error)),
-            onTap: () { Navigator.pop(context); telegram.logout(); },
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _drawerSectionHeader(String title, ThemeData theme) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: Text(title, style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.w600)),
+  Widget _drawerItem(IconData icon, String title, VoidCallback onTap, {Color? color}) {
+    return ListTile(
+      leading: Icon(icon, color: color ?? AppColors.textSecondary, size: 22),
+      title: Text(title, style: GoogleFonts.inter(fontSize: 14,
+          color: color ?? AppColors.textSecondary, fontWeight: FontWeight.w500)),
+      dense: true,
+      onTap: onTap,
     );
+  }
+
+  Widget _buildStorageRing(ThemeData theme) {
+    if (_stats == null) return const SizedBox.shrink();
+    final totalFiles = _stats!['totalFiles'] ?? 0;
+    final totalSize = _stats!['totalSize'] ?? 0;
+    final cats = _stats!['categories'] as Map<String, dynamic>? ?? {};
+
+    final items = ['images', 'videos', 'audio', 'documents'];
+    final colors = [AppColors.primary, AppColors.accent, AppColors.success, AppColors.textSecondary];
+    final counts = items.map((k) => (cats[k] as num?)?.toInt() ?? 0).toList();
+    final total = counts.fold<int>(0, (s, c) => s + c);
+
+    return Row(
+      children: [
+        SizedBox(
+          width: 56, height: 56,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(
+                width: 56, height: 56,
+                child: CircularProgressIndicator(
+                  value: total > 0 ? 1.0 : 0,
+                  strokeWidth: 4,
+                  backgroundColor: AppColors.surfaceElevated,
+                  valueColor: const AlwaysStoppedAnimation(AppColors.primary),
+                ),
+              ),
+              Text('${_formatNumber(totalFiles)}', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('${_formatNumber(totalFiles)} files', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white)),
+            const SizedBox(height: 2),
+            Text(_formatSize(totalSize), style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
+          ]),
+        ),
+      ],
+    );
+  }
+
+  String _formatNumber(int n) {
+    if (n < 1000) return n.toString();
+    if (n < 1000000) return '${(n / 1000).toStringAsFixed(1)}k';
+    return '${(n / 1000000).toStringAsFixed(1)}M';
   }
 
   // ─── Folder Dialogs ───────────────────────────────────────────
@@ -600,10 +805,15 @@ class _DashboardPageState extends State<DashboardPage>
   void _showCreateFolderDialog(BuildContext context, FileService fs) {
     final ctrl = TextEditingController();
     showDialog(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('New Folder'),
-      content: TextField(controller: ctrl, decoration: const InputDecoration(hintText: 'Channel name', border: OutlineInputBorder()), autofocus: true),
+      backgroundColor: AppColors.surface,
+      title: Text('New Folder', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
+      content: TextField(
+        controller: ctrl, autofocus: true,
+        style: GoogleFonts.inter(fontSize: 14, color: Colors.white),
+        decoration: InputDecoration(hintText: 'Channel name'),
+      ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: GoogleFonts.inter(color: AppColors.textSecondary))),
         FilledButton(onPressed: () { if (ctrl.text.trim().isNotEmpty) { fs.createFolder(ctrl.text.trim()); Navigator.pop(ctx); } }, child: const Text('Create')),
       ],
     ));
@@ -611,18 +821,25 @@ class _DashboardPageState extends State<DashboardPage>
 
   void _showFolderOptions(BuildContext context, FileService fs, DriveFolder folder) {
     showModalBottomSheet(context: context, builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      ListTile(leading: const Icon(Icons.edit), title: const Text('Rename'), onTap: () { Navigator.pop(ctx); _showRenameDialog(context, fs, folder); }),
-      ListTile(leading: Icon(Icons.delete, color: Theme.of(context).colorScheme.error), title: Text('Delete', style: TextStyle(color: Theme.of(context).colorScheme.error)), onTap: () { Navigator.pop(ctx); _showDeleteConfirm(context, fs, folder); }),
+      ListTile(leading: const Icon(Icons.edit_rounded, color: AppColors.textSecondary), title: Text('Rename', style: GoogleFonts.inter(color: Colors.white)),
+        onTap: () { Navigator.pop(ctx); _showRenameDialog(context, fs, folder); }),
+      ListTile(leading: const Icon(Icons.delete_rounded, color: AppColors.error), title: Text('Delete', style: GoogleFonts.inter(color: AppColors.error)),
+        onTap: () { Navigator.pop(ctx); _showDeleteConfirm(context, fs, folder); }),
     ])));
   }
 
   void _showRenameDialog(BuildContext context, FileService fs, DriveFolder folder) {
     final ctrl = TextEditingController(text: folder.title);
     showDialog(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('Rename Folder'),
-      content: TextField(controller: ctrl, decoration: const InputDecoration(hintText: 'New name', border: OutlineInputBorder()), autofocus: true),
+      backgroundColor: AppColors.surface,
+      title: Text('Rename Folder', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
+      content: TextField(
+        controller: ctrl, autofocus: true,
+        style: GoogleFonts.inter(fontSize: 14, color: Colors.white),
+        decoration: const InputDecoration(hintText: 'New name'),
+      ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: GoogleFonts.inter(color: AppColors.textSecondary))),
         FilledButton(onPressed: () { if (ctrl.text.trim().isNotEmpty) { fs.renameFolder(folder, ctrl.text.trim()); Navigator.pop(ctx); } }, child: const Text('Rename')),
       ],
     ));
@@ -630,12 +847,17 @@ class _DashboardPageState extends State<DashboardPage>
 
   void _showDeleteConfirm(BuildContext context, FileService fs, DriveFolder folder) {
     showDialog(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('Delete Folder'),
-      content: Text('Are you sure you want to delete "${folder.title}"? This will permanently delete the channel and all its messages.'),
+      backgroundColor: AppColors.surface,
+      title: Text('Delete Folder', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
+      content: Text('Are you sure you want to delete "${folder.title}"? This will permanently delete the channel and all its messages.',
+          style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary)),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-        FilledButton(style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error, foregroundColor: Theme.of(context).colorScheme.onError),
-          onPressed: () { fs.deleteFolder(folder); Navigator.pop(ctx); }, child: const Text('Delete')),
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: GoogleFonts.inter(color: AppColors.textSecondary))),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+          onPressed: () { fs.deleteFolder(folder); Navigator.pop(ctx); },
+          child: const Text('Delete'),
+        ),
       ],
     ));
   }
@@ -643,55 +865,162 @@ class _DashboardPageState extends State<DashboardPage>
   // ─── Body ─────────────────────────────────────────────────────
 
   Widget _buildBody(BuildContext context, FileService fs, ThemeData theme) {
+    final api = context.watch<ApiService>();
+
     if (fs.error != null && fs.files.isEmpty) {
       return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.error_outline, size: 48, color: theme.colorScheme.error),
-        const SizedBox(height: 16), Text(fs.error!), const SizedBox(height: 16),
-        FilledButton.tonal(onPressed: () { if (fs.activeFolder != null) fs.fetchFiles(fs.activeFolder!); }, child: const Text('Retry')),
+        Container(
+          width: 80, height: 80,
+          decoration: BoxDecoration(color: AppColors.error.withOpacity(0.1), shape: BoxShape.circle),
+          child: const Icon(Icons.error_outline_rounded, size: 36, color: AppColors.error),
+        ),
+        const SizedBox(height: 16),
+        Text(fs.error!, style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary)),
+        const SizedBox(height: 16),
+        _glassButton('Retry', () { if (fs.activeFolder != null) fs.fetchFiles(fs.activeFolder!); }),
       ]));
     }
     if (fs.loading && fs.files.isEmpty) return const ShimmerList();
     if (!fs.loading && fs.files.isEmpty) {
-      return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.folder_open, size: 64, color: theme.colorScheme.onSurfaceVariant),
-        const SizedBox(height: 16), Text(fs.activeFolder != null ? 'Empty folder' : 'Select a folder', style: theme.textTheme.titleMedium),
-        const SizedBox(height: 8), Text('Tap + to upload files', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-      ]));
+      return _emptyState(context);
     }
 
-    return SafeArea(
-      child: Column(children: [
-        TabBar(
-          controller: _tabController,
-          tabAlignment: TabAlignment.fill,
-          isScrollable: true,
-          labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-          unselectedLabelStyle: const TextStyle(fontSize: 12),
-          tabs: [
-            const Tab(text: 'All'),
-            const Tab(text: 'Images'),
-            const Tab(text: 'Videos'),
-            const Tab(text: 'Audio'),
-            const Tab(text: 'Docs'),
-            const Tab(icon: Icon(Icons.star, size: 18), text: 'Fav'),
-            const Tab(icon: Icon(Icons.history, size: 18), text: 'Recent'),
-          ],
+    final activeFiles = _applySort(_applySearch(fs.files));
+    final totalSize = activeFiles.fold<int>(0, (s, f) => s + f.size);
+
+    return Column(
+      children: [
+        // ─── Server Unreachable Banner ──────────────────────
+        if (!api.serverReachable)
+          Container(
+            width: double.infinity,
+            color: AppColors.error.withOpacity(0.9),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: Row(children: [
+              const Icon(Icons.cloud_off_rounded, size: 16, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('Server unreachable — some features may not work',
+                    style: GoogleFonts.inter(fontSize: 12, color: Colors.white)),
+              ),
+            ]),
+          ),
+
+        // ─── Tab Bar ────────────────────────────────────────
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceElevated,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: TabBar(
+            controller: _tabController,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            indicator: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              gradient: const LinearGradient(colors: [AppColors.gradientStart, AppColors.gradientEnd]),
+            ),
+            indicatorSize: TabBarIndicatorSize.tab,
+            dividerColor: Colors.transparent,
+            splashFactory: NoSplash.splashFactory,
+            labelStyle: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
+            unselectedLabelStyle: GoogleFonts.inter(fontSize: 12),
+            tabs: [
+              _buildPillTab(Icons.all_inclusive_rounded, 'All'),
+              _buildPillTab(Icons.image_rounded, 'Images'),
+              _buildPillTab(Icons.videocam_rounded, 'Videos'),
+              _buildPillTab(Icons.audiotrack_rounded, 'Audio'),
+              _buildPillTab(Icons.description_rounded, 'Docs'),
+              _buildPillTab(Icons.star_rounded, 'Fav'),
+              _buildPillTab(Icons.history_rounded, 'Recent'),
+            ],
+          ),
         ),
+
+        // ─── File Count Bar ─────────────────────────────────
+        if (activeFiles.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+            child: Row(children: [
+              Text('${activeFiles.length} files',
+                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textSecondary)),
+              const SizedBox(width: 6),
+              Text('· ${_formatSize(totalSize)}',
+                  style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
+              const Spacer(),
+              if (_sortMode != _SortMode.defaultOrder)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                  ),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _sortMode = _SortMode.defaultOrder),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text(_sortLabel, style: GoogleFonts.inter(fontSize: 11, color: AppColors.primary)),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.close_rounded, size: 14, color: AppColors.primary),
+                    ]),
+                  ),
+                ),
+            ]),
+          ),
+
         Expanded(
           child: TabBarView(
             controller: _tabController,
             children: [
               _buildAllTab(context, fs, _applySort(_applySearch(fs.files)), theme),
               _buildImagesTab(context, fs, _applySort(_applySearch(fs.images))),
-              _buildListTab(context, fs, _applySort(_applySearch(fs.videos)), icon: Icons.videocam, color: Colors.blue),
-              _buildListTab(context, fs, _applySort(_applySearch(fs.audioFiles)), icon: Icons.audiotrack, color: Colors.orange),
-              _buildListTab(context, fs, _applySort(_applySearch(fs.documents)), icon: Icons.insert_drive_file, color: Colors.grey),
+              _buildListTab(context, fs, _applySort(_applySearch(fs.videos)), icon: Icons.videocam_rounded, color: AppColors.accent),
+              _buildListTab(context, fs, _applySort(_applySearch(fs.audioFiles)), icon: Icons.audiotrack_rounded, color: AppColors.success),
+              _buildListTab(context, fs, _applySort(_applySearch(fs.documents)), icon: Icons.insert_drive_file_rounded, color: AppColors.textSecondary),
               _buildFavoritesTab(context, theme),
               _buildRecentsTab(context, theme),
             ],
           ),
         ),
-      ]),
+      ],
+    );
+  }
+
+  Widget _buildPillTab(IconData icon, String label) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      child: Tab(child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16),
+          const SizedBox(width: 4),
+          Text(label),
+        ],
+      )),
+    );
+  }
+
+  Widget _glassButton(String text, VoidCallback onPressed) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onPressed,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(text, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.primary)),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -705,56 +1034,59 @@ class _DashboardPageState extends State<DashboardPage>
     final sizes = _stats!['sizes'] as Map<String, dynamic>? ?? {};
 
     final items = ['images', 'videos', 'audio', 'documents'];
-    final colors = [Colors.green, Colors.blue, Colors.orange, Colors.grey];
-    final icons = [Icons.image, Icons.videocam, Icons.audiotrack, Icons.insert_drive_file];
+    final colors = [AppColors.primary, AppColors.accent, AppColors.success, AppColors.textSecondary];
+    final icons = [Icons.image_rounded, Icons.videocam_rounded, Icons.audiotrack_rounded, Icons.insert_drive_file_rounded];
     final totalCatCount = items.fold<int>(0, (s, k) => s + ((cats[k] as num?)?.toInt() ?? 0));
 
-    return Card(
-      margin: const EdgeInsets.fromLTRB(8, 4, 8, 2),
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Text('${_formatNumber(totalFiles)} files',
-                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
             const SizedBox(width: 12),
             Text(_formatSize(totalSize),
-                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
           ]),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: SizedBox(
-              height: 8,
-              child: Row(children: items.asMap().entries.map((e) {
-                final count = (cats[e.value] as num?)?.toInt() ?? 0;
-                final flex = totalCatCount > 0 ? count : 0;
-                return flex > 0
-                    ? Expanded(flex: flex, child: Container(color: colors[e.key]))
-                    : const SizedBox.shrink();
-              }).toList()),
-            ),
+          const SizedBox(height: 10),
+          Container(
+            height: 6,
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(3)),
+            child: Row(children: items.asMap().entries.map((e) {
+              final count = (cats[e.value] as num?)?.toInt() ?? 0;
+              final flex = totalCatCount > 0 ? count : 0;
+              return flex > 0
+                  ? Expanded(flex: flex, child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 0.5),
+                      decoration: BoxDecoration(
+                        color: colors[e.key],
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ))
+                  : const SizedBox.shrink();
+            }).toList()),
           ),
-          const SizedBox(height: 6),
-          Wrap(spacing: 12, runSpacing: 4, children: items.asMap().entries.map((e) {
+          const SizedBox(height: 8),
+          Wrap(spacing: 16, runSpacing: 6, children: items.asMap().entries.map((e) {
             final count = (cats[e.value] as num?)?.toInt() ?? 0;
             final sz = (sizes[e.value] as num?)?.toInt() ?? 0;
             return Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(icons[e.key], size: 14, color: colors[e.key]),
-              const SizedBox(width: 4),
+              const SizedBox(width: 6),
               Text('${_formatNumber(count)} · ${_formatSize(sz)}',
-                  style: theme.textTheme.bodySmall?.copyWith(fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
+                  style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary)),
             ]);
           }).toList()),
         ]),
       ),
     );
-  }
-
-  String _formatNumber(int n) {
-    if (n < 1000) return n.toString();
-    if (n < 1000000) return '${(n / 1000).toStringAsFixed(1)}k';
-    return '${(n / 1000000).toStringAsFixed(1)}M';
   }
 
   // ─── Tab Builders ─────────────────────────────────────────────
@@ -773,7 +1105,9 @@ class _DashboardPageState extends State<DashboardPage>
 
     return RefreshIndicator(
       onRefresh: () async { if (fs.activeFolder != null) await fs.fetchFiles(fs.activeFolder!); },
+      color: AppColors.primary,
       child: ListView(
+        controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           _buildStatsCard(theme),
@@ -782,6 +1116,7 @@ class _DashboardPageState extends State<DashboardPage>
             ...entry.value.map((f) => _buildFileRow(context, fs, f)),
           ]),
           if (sections.isEmpty) _emptyState(context),
+          const SizedBox(height: 80),
         ],
       ),
     );
@@ -791,9 +1126,13 @@ class _DashboardPageState extends State<DashboardPage>
     if (files.isEmpty) return _emptyState(context);
     return RefreshIndicator(
       onRefresh: () async { if (fs.activeFolder != null) await fs.fetchFiles(fs.activeFolder!); },
+      color: AppColors.primary,
       child: GridView.builder(
-        padding: EdgeInsets.zero, physics: const AlwaysScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 0, crossAxisSpacing: 0, childAspectRatio: 1),
+        controller: _scrollController,
+        padding: const EdgeInsets.all(8),
+        physics: const AlwaysScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3, mainAxisSpacing: 4, crossAxisSpacing: 4, childAspectRatio: 1),
         itemCount: files.length,
         itemBuilder: (context, index) => _buildImageGridItem(context, fs, files[index], files, index),
       ),
@@ -804,8 +1143,11 @@ class _DashboardPageState extends State<DashboardPage>
     if (files.isEmpty) return _emptyState(context);
     return RefreshIndicator(
       onRefresh: () async { if (fs.activeFolder != null) await fs.fetchFiles(fs.activeFolder!); },
+      color: AppColors.primary,
       child: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 4), physics: const AlwaysScrollableScrollPhysics(),
+        controller: _scrollController,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        physics: const AlwaysScrollableScrollPhysics(),
         itemCount: files.length,
         itemBuilder: (context, index) => _buildListItem(context, fs, files[index], icon: icon, color: color),
       ),
@@ -814,13 +1156,31 @@ class _DashboardPageState extends State<DashboardPage>
 
   Widget _buildFavoritesTab(BuildContext context, ThemeData theme) {
     final fav = context.watch<FavoritesService>();
-    if (fav.loading) return const Center(child: CircularProgressIndicator());
+    if (fav.loading) {
+      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    }
     if (fav.favorites.isEmpty) {
-      return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.star_outline, size: 64, color: theme.colorScheme.onSurfaceVariant),
-        const SizedBox(height: 16), Text('No favorites yet', style: theme.textTheme.titleMedium),
-        const SizedBox(height: 8), Text('Tap the star icon on any file to favorite it', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-      ]));
+      return RefreshIndicator(
+        onRefresh: () => fav.fetchFavorites(),
+        color: AppColors.primary,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+            Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                width: 80, height: 80,
+                decoration: BoxDecoration(color: AppColors.accent.withOpacity(0.1), shape: BoxShape.circle),
+                child: const Icon(Icons.star_outline_rounded, size: 40, color: AppColors.accent),
+              ),
+              const SizedBox(height: 16),
+              Text('No favorites yet', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
+              const SizedBox(height: 8),
+              Text('Tap the star icon on any file to favorite it', style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
+            ])),
+          ],
+        ),
+      );
     }
     final images = fav.favorites.where((f) => f.isImage).toList();
     final videos = fav.favorites.where((f) => f.isVideo).toList();
@@ -832,76 +1192,79 @@ class _DashboardPageState extends State<DashboardPage>
     if (audio.isNotEmpty) sections['Audio'] = audio;
     if (docs.isNotEmpty) sections['Documents'] = docs;
 
-    return ListView(children: sections.entries.expand((entry) => [
-      _SectionHeader(title: entry.key, count: entry.value.length),
-      ...entry.value.map((f) => _buildFavItem(context, f)),
-    ]).toList());
-  }
-
-  Widget _buildFavItem(BuildContext context, DriveFile file) {
-    final theme = Theme.of(context);
-    IconData icon; Color color;
-    if (file.isImage) { icon = Icons.image; color = Colors.green; }
-    else if (file.isVideo) { icon = Icons.videocam; color = Colors.blue; }
-    else if (file.isAudio) { icon = Icons.audiotrack; color = Colors.orange; }
-    else { icon = Icons.insert_drive_file; color = Colors.grey; }
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      child: ListTile(
-        leading: Container(
-          width: 42, height: 42,
-          decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-          child: Icon(icon, size: 22, color: color),
-        ),
-        title: Text(file.fileName, maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
-        subtitle: Text('${_formatSize(file.size)} · ${_formatDate(file.date)}', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        trailing: IconButton(
-          icon: Icon(Icons.star, color: Colors.amber),
-          onPressed: () async {
-            final fav = context.read<FavoritesService>();
-            final api = context.read<ApiService>();
-            await api.removeFavorite(file.messageId);
-            await fav.fetchFavorites();
-          },
-        ),
+    return RefreshIndicator(
+      onRefresh: () => fav.fetchFavorites(),
+      color: AppColors.primary,
+      child: ListView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: sections.entries.expand((entry) => [
+          _SectionHeader(title: entry.key, count: entry.value.length),
+          ...entry.value.map((f) => _buildFavItem(context, f)),
+        ]).toList(),
       ),
     );
   }
 
   Widget _buildRecentsTab(BuildContext context, ThemeData theme) {
-    if (!_recentsLoaded) return const Center(child: CircularProgressIndicator());
-    if (_recents.isEmpty) {
-      return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.history, size: 64, color: theme.colorScheme.onSurfaceVariant),
-        const SizedBox(height: 16), Text('No recent files', style: theme.textTheme.titleMedium),
-      ]));
+    if (!_recentsLoaded) {
+      return RefreshIndicator(
+        onRefresh: _emptyRefresh,
+        color: AppColors.primary,
+        child: const SizedBox.expand(child: Center(child: CircularProgressIndicator(color: AppColors.primary))),
+      );
     }
-    return ListView.builder(
-      padding: const EdgeInsets.all(8),
-      itemCount: _recents.length,
-      itemBuilder: (context, index) {
-        final file = _recents[index];
-        IconData icon; Color color;
-        if (file.isImage) { icon = Icons.image; color = Colors.green; }
-        else if (file.isVideo) { icon = Icons.videocam; color = Colors.blue; }
-        else if (file.isAudio) { icon = Icons.audiotrack; color = Colors.orange; }
-        else { icon = Icons.insert_drive_file; color = Colors.grey; }
-        return Card(
-          margin: const EdgeInsets.only(bottom: 4),
-          child: ListTile(
-            leading: Container(
-              width: 42, height: 42,
-              decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-              child: Icon(icon, size: 22, color: color),
+    if (_recents.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _loadRecents,
+        color: AppColors.primary,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+            Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                width: 80, height: 80,
+                decoration: BoxDecoration(color: AppColors.textSecondary.withOpacity(0.1), shape: BoxShape.circle),
+                child: const Icon(Icons.history_rounded, size: 40, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              Text('No recent files', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
+            ])),
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _loadRecents,
+      color: AppColors.primary,
+      child: ListView.builder(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(8),
+        itemCount: _recents.length,
+        itemBuilder: (context, index) {
+          final file = _recents[index];
+          IconData icon; Color color;
+          if (file.isImage) { icon = Icons.image_rounded; color = AppColors.primary; }
+          else if (file.isVideo) { icon = Icons.videocam_rounded; color = AppColors.accent; }
+          else if (file.isAudio) { icon = Icons.audiotrack_rounded; color = AppColors.success; }
+          else { icon = Icons.insert_drive_file_rounded; color = AppColors.textSecondary; }
+          return _buildCard(
+            child: ListTile(
+              leading: _fileIcon(icon, color),
+              title: Text(file.fileName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white)),
+              subtitle: Text('${_formatSize(file.size)} · ${_formatDate(file.date)}',
+                  style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary)),
             ),
-            title: Text(file.fileName, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: Text('${_formatSize(file.size)} · ${_formatDate(file.date)}', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
+
+  Future<void> _emptyRefresh() async {}
 
   // ─── Item Builders ────────────────────────────────────────────
 
@@ -917,69 +1280,98 @@ class _DashboardPageState extends State<DashboardPage>
       child = _imagePlaceholder(context);
     }
 
-    return GestureDetector(
-      onTap: () {
-        if (_multiSelectMode) _toggleSelect(file);
-        else _downloadAndPreview(context, fs, file, imageList: allImages, imageIndex: index);
-      },
-      onLongPress: () => _enterMultiSelect(file),
-      child: Stack(fit: StackFit.expand, children: [
-        Hero(tag: 'image_${file.docId}', child: child),
-        if (selected)
-          Container(color: Colors.blue.withOpacity(0.3), child: Center(child: Container(width: 24, height: 24, decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle), child: const Icon(Icons.check, size: 16, color: Colors.white)))),
-      ]),
+    return AnimatedScale(
+      scale: selected ? 0.92 : 1,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+      child: GestureDetector(
+        onTap: () {
+          if (_multiSelectMode) _toggleSelect(file);
+          else _downloadAndPreview(context, fs, file, imageList: allImages, imageIndex: index);
+        },
+        onLongPress: () => _enterMultiSelect(file),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: selected ? AppColors.primary : Colors.transparent, width: 2),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Stack(fit: StackFit.expand, children: [
+              Hero(tag: 'image_${file.docId}', child: child),
+              if (selected)
+                Container(color: AppColors.primary.withOpacity(0.3),
+                  child: const Center(child: Icon(Icons.check_circle, color: Colors.white, size: 24))),
+            ]),
+          ),
+        ),
+      ),
     );
   }
 
   Widget _imagePlaceholder(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-      child: Center(child: Icon(Icons.image, size: 28, color: isDark ? Colors.white24 : Colors.black26)));
+    return Container(
+      color: AppColors.surfaceElevated,
+      child: const Center(child: Icon(Icons.image_rounded, size: 28, color: AppColors.textSecondary)),
+    );
   }
 
   Widget _buildFileRow(BuildContext context, FileService fs, DriveFile file) {
     IconData icon; Color color;
     switch (file.categoryIcon) {
-      case 'image': icon = Icons.image; color = Colors.green; break;
-      case 'video': icon = Icons.videocam; color = Colors.blue; break;
-      case 'audio': icon = Icons.audiotrack; color = Colors.orange; break;
-      default: icon = Icons.insert_drive_file; color = Colors.grey;
+      case 'image': icon = Icons.image_rounded; color = AppColors.primary; break;
+      case 'video': icon = Icons.videocam_rounded; color = AppColors.accent; break;
+      case 'audio': icon = Icons.audiotrack_rounded; color = AppColors.success; break;
+      default: icon = Icons.insert_drive_file_rounded; color = AppColors.textSecondary;
     }
     return _buildListItem(context, fs, file, icon: icon, color: color);
   }
 
   Widget _buildListItem(BuildContext context, FileService fs, DriveFile file, {required IconData icon, required Color color}) {
-    final theme = Theme.of(context);
     final selected = _selectedFiles.contains(file);
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      clipBehavior: Clip.antiAlias,
+    return _buildCard(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       child: InkWell(
         onTap: () { if (_multiSelectMode) _toggleSelect(file); else _downloadAndPreview(context, fs, file); },
         onLongPress: () => _enterMultiSelect(file),
         child: Container(
-          color: selected ? Colors.blue.withOpacity(0.08) : null,
+          decoration: selected
+              ? BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.primary.withOpacity(0.5), width: 1.5),
+                )
+              : null,
           child: Padding(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(12),
             child: Row(children: [
               if (_multiSelectMode)
-                Padding(padding: const EdgeInsets.only(right: 8), child: Icon(selected ? Icons.check_circle : Icons.radio_button_unchecked,
-                    color: selected ? Colors.blue : theme.colorScheme.onSurfaceVariant, size: 22)),
-              Container(width: 42, height: 42,
-                decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-                child: Icon(icon, size: 22, color: color)),
-              const SizedBox(width: 10),
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    child: Icon(
+                      selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                      color: selected ? AppColors.primary : AppColors.textSecondary,
+                      size: 22,
+                    ),
+                  ),
+                ),
+              _fileIcon(icon, color),
+              const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(file.fileName, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 2),
+                Text(file.fileName,
+                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white),
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 4),
                 Row(children: [
-                  Text(_formatSize(file.size), style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                  Text(' · ', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                  Text(_formatDate(file.date), style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                  Text(_formatSize(file.size), style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary)),
+                  Text(' · ', style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary)),
+                  Text(_formatDate(file.date), style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary)),
                   if (file.duration > 0) ...[
-                    Text(' · ', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                    Text(_formatDuration(file.duration), style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                    Text(' · ', style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary)),
+                    Text(_formatDuration(file.duration), style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary)),
                   ],
                 ]),
               ])),
@@ -987,14 +1379,14 @@ class _DashboardPageState extends State<DashboardPage>
                 Row(mainAxisSize: MainAxisSize.min, children: [
                   if (file.isZip)
                     IconButton(
-                      icon: const Icon(Icons.unarchive, size: 20),
-                      color: theme.colorScheme.onSurfaceVariant,
+                      icon: const Icon(Icons.unarchive_rounded, size: 20),
+                      color: AppColors.textSecondary,
                       tooltip: 'Extract',
                       onPressed: () => _extractZip(context, fs, file),
                     ),
                   IconButton(
-                    icon: Icon(Icons.star_border, size: 20),
-                    color: theme.colorScheme.onSurfaceVariant,
+                    icon: const Icon(Icons.star_border_rounded, size: 20),
+                    color: AppColors.textSecondary,
                     onPressed: () async {
                       final fav = context.read<FavoritesService>();
                       final chatId = fs.activeFolder?.chatId?.toString() ?? '';
@@ -1012,13 +1404,127 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
+  Widget _buildFavItem(BuildContext context, DriveFile file) {
+    IconData icon; Color color;
+    if (file.isImage) { icon = Icons.image_rounded; color = AppColors.primary; }
+    else if (file.isVideo) { icon = Icons.videocam_rounded; color = AppColors.accent; }
+    else if (file.isAudio) { icon = Icons.audiotrack_rounded; color = AppColors.success; }
+    else { icon = Icons.insert_drive_file_rounded; color = AppColors.textSecondary; }
+
+    return _buildCard(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+      child: ListTile(
+        leading: _fileIcon(icon, color),
+        title: Text(file.fileName, maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white)),
+        subtitle: Text('${_formatSize(file.size)} · ${_formatDate(file.date)}',
+            style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary)),
+        trailing: IconButton(
+          icon: const Icon(Icons.star_rounded, color: Colors.amber),
+          onPressed: () async {
+            final fav = context.read<FavoritesService>();
+            final api = context.read<ApiService>();
+            await api.removeFavorite(file.messageId);
+            await fav.fetchFavorites();
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _fileIcon(IconData icon, Color color) {
+    return Container(
+      width: 44, height: 44,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(icon, size: 22, color: color),
+    );
+  }
+
+  Widget _buildCard({required Widget child, EdgeInsets margin = EdgeInsets.zero}) {
+    return Container(
+      margin: margin,
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    ).animate().fadeIn(duration: 300.ms).slideY(begin: 10, end: 0, curve: Curves.easeOutCubic);
+  }
+
   Widget _emptyState(BuildContext context) {
     return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Icon(Icons.folder_open, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
+      Container(
+        width: 100, height: 100,
+        decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.05), shape: BoxShape.circle),
+        child: CustomPaint(
+          size: const Size(100, 100),
+          painter: _CloudPainter(),
+        ),
+      ),
       const SizedBox(height: 16),
-      Text(_searchQuery.isNotEmpty ? 'No matching files' : 'No files here', style: Theme.of(context).textTheme.titleMedium),
+      Text(_searchQuery.isNotEmpty ? 'No matching files' : 'No files here yet',
+          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
+      const SizedBox(height: 8),
+      Text(_searchQuery.isNotEmpty ? 'Try a different search' : 'Upload your first file to get started',
+          style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
+      if (_searchQuery.isEmpty) ...[
+        const SizedBox(height: 20),
+        Container(
+          height: 48,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: const LinearGradient(colors: [AppColors.gradientStart, AppColors.gradientEnd]),
+            boxShadow: [BoxShadow(color: AppColors.primaryGlow, blurRadius: 20, spreadRadius: 1)],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => _pickAndUpload(context.read<FileService>()),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 28),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.cloud_upload_rounded, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Text('Upload', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ],
     ]));
   }
+}
+
+class _CloudPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = AppColors.primary.withOpacity(0.2)
+      ..style = PaintingStyle.fill;
+
+    final path = Path();
+    final cx = size.width / 2;
+    final cy = size.height / 2 + 4;
+    final r = size.width * 0.25;
+
+    path.addOval(Rect.fromCircle(center: Offset(cx, cy), radius: r));
+    path.addOval(Rect.fromCircle(center: Offset(cx - r * 0.7, cy + r * 0.1), radius: r * 0.75));
+    path.addOval(Rect.fromCircle(center: Offset(cx + r * 0.7, cy + r * 0.1), radius: r * 0.65));
+    path.addOval(Rect.fromCircle(center: Offset(cx - r * 0.35, cy - r * 0.4), radius: r * 0.55));
+    path.addOval(Rect.fromCircle(center: Offset(cx + r * 0.35, cy - r * 0.35), radius: r * 0.5));
+
+    canvas.drawPath(Path.combine(PathOperation.union, path, Path()), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 // ─── Section Header ─────────────────────────────────────────────
@@ -1029,11 +1535,18 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 16, 12, 4),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
       child: Row(children: [
-        Text(title, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary)),
+        Text(title, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.primary)),
         const SizedBox(width: 6),
-        Text('$count', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text('$count', style: GoogleFonts.inter(fontSize: 11, color: AppColors.primary)),
+        ),
       ]),
     );
   }
@@ -1047,9 +1560,15 @@ class _FolderPickerSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Padding(padding: const EdgeInsets.all(16), child: Text('Move to folder', style: Theme.of(context).textTheme.titleMedium)),
+      Padding(padding: const EdgeInsets.all(16), child: Text('Move to folder',
+          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white))),
       if (folders.isEmpty) const Padding(padding: EdgeInsets.all(24), child: Text('No other folders available'))
-      else ...folders.map((f) => ListTile(leading: Icon(f.type == 'saved' ? Icons.save : Icons.folder), title: Text(f.title), onTap: () => Navigator.pop(context, f))),
+      else ...folders.map((f) => ListTile(
+        leading: Icon(f.type == 'saved' ? Icons.save_rounded : Icons.folder_rounded,
+            color: AppColors.textSecondary, size: 22),
+        title: Text(f.title, style: GoogleFonts.inter(fontSize: 14, color: Colors.white)),
+        onTap: () => Navigator.pop(context, f),
+      )),
       const SizedBox(height: 8),
     ]));
   }
@@ -1101,20 +1620,36 @@ class _MultiUploadSheetState extends State<_MultiUploadSheet> {
     final total = widget.files.length;
     final pct = total > 0 ? (_completed + _failed) / total : 0.0;
     return Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [ Icon(_done ? Icons.check_circle : Icons.cloud_upload, color: _done ? Colors.green : theme.colorScheme.primary), const SizedBox(width: 12),
-        Text(_done ? 'Upload complete' : 'Uploading ${widget.files.length} files...', style: theme.textTheme.titleMedium) ]),
+      Row(children: [
+        Icon(_done ? Icons.check_circle_rounded : Icons.cloud_upload_rounded,
+            color: _done ? AppColors.success : AppColors.primary, size: 24),
+        const SizedBox(width: 12),
+        Text(_done ? 'Upload complete' : 'Uploading ${widget.files.length} files...',
+            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+      ]),
       const SizedBox(height: 12),
-      LinearProgressIndicator(value: _done ? 1.0 : pct),
+      ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: LinearProgressIndicator(value: _done ? 1.0 : pct, minHeight: 4,
+            backgroundColor: AppColors.surfaceElevated, color: AppColors.primary),
+      ),
       const SizedBox(height: 8),
-      Text('$_completed done · $_failed failed · ${total - _completed - _failed} remaining', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+      Text('$_completed done · $_failed failed · ${total - _completed - _failed} remaining',
+          style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
       const SizedBox(height: 12),
-      SizedBox(height: 160, child: ListView.separated(itemCount: widget.files.length, separatorBuilder: (_, __) => const Divider(height: 1),
+      SizedBox(height: 160, child: ListView.separated(itemCount: widget.files.length, separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.border),
         itemBuilder: (context, index) {
           final file = widget.files[index]; final progress = _progress[index];
-          return ListTile(dense: true, leading: Icon(progress == 1.0 ? Icons.check_circle : progress == -1 ? Icons.error : Icons.hourglass_empty, size: 18,
-            color: progress == 1.0 ? Colors.green : progress == -1 ? theme.colorScheme.error : theme.colorScheme.onSurfaceVariant),
-            title: Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
-            trailing: progress != null && progress >= 0 ? SizedBox(width: 60, child: LinearProgressIndicator(value: progress, minHeight: 4)) : progress == -1 ? const Icon(Icons.error, size: 16) : null);
+          return ListTile(dense: true, leading: Icon(
+            progress == 1.0 ? Icons.check_circle_rounded : progress == -1 ? Icons.error_rounded : Icons.hourglass_empty_rounded,
+            size: 18,
+            color: progress == 1.0 ? AppColors.success : progress == -1 ? AppColors.error : AppColors.textSecondary),
+            title: Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(fontSize: 13, color: Colors.white)),
+            trailing: progress != null && progress >= 0
+                ? SizedBox(width: 60, child: LinearProgressIndicator(value: progress, minHeight: 4,
+                    backgroundColor: AppColors.surfaceElevated, color: AppColors.primary))
+                : progress == -1 ? const Icon(Icons.error_rounded, size: 16, color: AppColors.error) : null);
         },
       )),
     ]));
@@ -1135,7 +1670,8 @@ class _UploadProgressSheetState extends State<_UploadProgressSheet> {
   @override
   void initState() { super.initState(); _startUpload(); }
   Future<void> _startUpload() async {
-    try { await widget.fs.uploadFile(widget.folder, widget.path);
+    try {
+      await widget.fs.uploadFile(widget.folder, widget.path);
       if (mounted) { setState(() => _completed = true); await Future.delayed(const Duration(seconds: 1)); if (mounted) Navigator.pop(context); }
     } catch (e) { if (mounted) setState(() => _error = e.toString()); }
   }
@@ -1143,18 +1679,38 @@ class _UploadProgressSheetState extends State<_UploadProgressSheet> {
   Widget build(BuildContext context) {
     final telegram = context.watch<TelegramService>();
     final fileName = widget.path.split('/').last;
-    return Padding(padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(_completed ? Icons.check_circle : _error != null ? Icons.error : Icons.cloud_upload, size: 48,
-          color: _completed ? Colors.green : _error != null ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.primary),
+        Icon(
+          _completed ? Icons.check_circle_rounded : _error != null ? Icons.error_rounded : Icons.cloud_upload_rounded,
+          size: 48,
+          color: _completed ? AppColors.success : _error != null ? AppColors.error : AppColors.primary,
+        ),
         const SizedBox(height: 16),
-        Text(_completed ? 'Upload complete' : _error != null ? 'Upload failed' : 'Uploading...', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8), Text(fileName, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant), maxLines: 1, overflow: TextOverflow.ellipsis),
-        const SizedBox(height: 16),
-        if (_error == null) LinearProgressIndicator(value: _completed ? 1.0 : telegram.uploadProgress),
-        if (_error != null) ...[const SizedBox(height: 8), Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error), textAlign: TextAlign.center)],
+        Text(_completed ? 'Upload complete' : _error != null ? 'Upload failed' : 'Uploading...',
+            style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
         const SizedBox(height: 8),
-        Text(_completed ? '100%' : _error != null ? '' : '${(telegram.uploadProgress * 100).toInt()}%', style: Theme.of(context).textTheme.bodySmall),
+        Text(fileName, style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
+            maxLines: 1, overflow: TextOverflow.ellipsis),
+        const SizedBox(height: 16),
+        if (_error == null)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: _completed ? 1.0 : telegram.uploadProgress,
+              minHeight: 4,
+              backgroundColor: AppColors.surfaceElevated,
+              color: AppColors.primary,
+            ),
+          ),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(_error!, style: GoogleFonts.inter(fontSize: 13, color: AppColors.error), textAlign: TextAlign.center),
+        ],
+        const SizedBox(height: 8),
+        Text(_completed ? '100%' : _error != null ? '' : '${(telegram.uploadProgress * 100).toInt()}%',
+            style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
         const SizedBox(height: 24),
       ]),
     );
@@ -1175,25 +1731,53 @@ class _DownloadProgressSheetState extends State<_DownloadProgressSheet> {
   @override
   void initState() { super.initState(); _startDownload(); }
   Future<void> _startDownload() async {
-    try { final path = await widget.fs.downloadFile(widget.file);
-      if (mounted) { if (path != null) { _resultPath = path; setState(() => _completed = true); await Future.delayed(const Duration(milliseconds: 500)); if (mounted) Navigator.pop(context, _resultPath); } else setState(() => _error = 'Download failed'); }
+    try {
+      final path = await widget.fs.downloadFile(widget.file);
+      if (mounted) {
+        if (path != null) {
+          _resultPath = path;
+          setState(() => _completed = true);
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (mounted) Navigator.pop(context, _resultPath);
+        } else setState(() => _error = 'Download failed');
+      }
     } catch (e) { if (mounted) setState(() => _error = e.toString()); }
   }
   @override
   Widget build(BuildContext context) {
     final telegram = context.watch<TelegramService>();
-    return Padding(padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(_completed ? Icons.check_circle : _error != null ? Icons.error : Icons.cloud_download, size: 48,
-          color: _completed ? Colors.green : _error != null ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.primary),
+        Icon(
+          _completed ? Icons.check_circle_rounded : _error != null ? Icons.error_rounded : Icons.cloud_download_rounded,
+          size: 48,
+          color: _completed ? AppColors.success : _error != null ? AppColors.error : AppColors.primary,
+        ),
         const SizedBox(height: 16),
-        Text(_completed ? 'Download complete' : _error != null ? 'Download failed' : 'Downloading...', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8), Text(widget.file.fileName, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant), maxLines: 1, overflow: TextOverflow.ellipsis),
-        const SizedBox(height: 16),
-        if (_error == null) LinearProgressIndicator(value: _completed ? 1.0 : telegram.downloadProgress),
-        if (_error != null) ...[const SizedBox(height: 8), Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error), textAlign: TextAlign.center)],
+        Text(_completed ? 'Download complete' : _error != null ? 'Download failed' : 'Downloading...',
+            style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
         const SizedBox(height: 8),
-        Text(_completed ? '100%' : _error != null ? '' : '${(telegram.downloadProgress * 100).toInt()}%', style: Theme.of(context).textTheme.bodySmall),
+        Text(widget.file.fileName, style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
+            maxLines: 1, overflow: TextOverflow.ellipsis),
+        const SizedBox(height: 16),
+        if (_error == null)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: _completed ? 1.0 : telegram.downloadProgress,
+              minHeight: 4,
+              backgroundColor: AppColors.surfaceElevated,
+              color: AppColors.primary,
+            ),
+          ),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(_error!, style: GoogleFonts.inter(fontSize: 13, color: AppColors.error), textAlign: TextAlign.center),
+        ],
+        const SizedBox(height: 8),
+        Text(_completed ? '100%' : _error != null ? '' : '${(telegram.downloadProgress * 100).toInt()}%',
+            style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
         const SizedBox(height: 24),
       ]),
     );
@@ -1207,12 +1791,7 @@ class _ZipEntry {
   final String path;
   final int size;
   final bool isFile;
-  const _ZipEntry({
-    required this.name,
-    required this.path,
-    required this.size,
-    required this.isFile,
-  });
+  const _ZipEntry({required this.name, required this.path, required this.size, required this.isFile});
 }
 
 class _ZipContentSheet extends StatelessWidget {
@@ -1230,83 +1809,92 @@ class _ZipContentSheet extends StatelessWidget {
       expand: false,
       builder: (context, scrollController) => Padding(
         padding: const EdgeInsets.only(top: 12),
-        child: Column(children: [
-          HandleBar(),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(children: [
-              Icon(Icons.unarchive, color: theme.colorScheme.primary, size: 22),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(p.basename(zipFileName),
-                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-              ),
-              Text('${entries.length} files', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-            ]),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
-          const Divider(height: 1),
-          Expanded(
-            child: entries.isEmpty
-                ? Center(child: Text('Empty archive', style: theme.textTheme.bodyMedium))
-                : ListView.separated(
-                    controller: scrollController,
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    itemCount: entries.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1, indent: 56),
-                    itemBuilder: (context, index) {
-                      final entry = entries[index];
-                      final ext = p.extension(entry.name).toLowerCase();
-                      IconData icon;
-                      Color color;
-                      if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].contains(ext)) {
-                        icon = Icons.image; color = Colors.green;
-                      } else if (['.mp4', '.mov', '.avi', '.mkv'].contains(ext)) {
-                        icon = Icons.videocam; color = Colors.blue;
-                      } else if (['.mp3', '.wav', '.aac', '.flac'].contains(ext)) {
-                        icon = Icons.audiotrack; color = Colors.orange;
-                      } else if (['.pdf'].contains(ext)) {
-                        icon = Icons.picture_as_pdf; color = Colors.red;
-                      } else if (['.zip', '.tar', '.gz', '.rar'].contains(ext)) {
-                        icon = Icons.folder_zip; color = Colors.grey;
-                      } else {
-                        icon = Icons.insert_drive_file; color = Colors.grey;
-                      }
+          child: Column(children: [
+            Container(
+              width: 32, height: 4,
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(color: AppColors.textSecondary.withOpacity(0.4), borderRadius: BorderRadius.circular(2)),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(children: [
+                const Icon(Icons.unarchive_rounded, color: AppColors.primary, size: 22),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(p.basename(zipFileName),
+                      style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
+                Text('${entries.length} files', style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
+              ]),
+            ),
+            const Divider(height: 1, color: AppColors.border),
+            Expanded(
+              child: entries.isEmpty
+                  ? Center(child: Text('Empty archive', style: GoogleFonts.inter(color: AppColors.textSecondary)))
+                  : ListView.separated(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      itemCount: entries.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1, indent: 56, color: AppColors.border),
+                      itemBuilder: (context, index) {
+                        final entry = entries[index];
+                        final ext = p.extension(entry.name).toLowerCase();
+                        IconData icon; Color color;
+                        if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].contains(ext)) {
+                          icon = Icons.image_rounded; color = AppColors.primary;
+                        } else if (['.mp4', '.mov', '.avi', '.mkv'].contains(ext)) {
+                          icon = Icons.videocam_rounded; color = AppColors.accent;
+                        } else if (['.mp3', '.wav', '.aac', '.flac'].contains(ext)) {
+                          icon = Icons.audiotrack_rounded; color = AppColors.success;
+                        } else if (['.pdf'].contains(ext)) {
+                          icon = Icons.picture_as_pdf_rounded; color = AppColors.error;
+                        } else if (['.zip', '.tar', '.gz', '.rar'].contains(ext)) {
+                          icon = Icons.folder_zip_rounded; color = AppColors.textSecondary;
+                        } else {
+                          icon = Icons.insert_drive_file_rounded; color = AppColors.textSecondary;
+                        }
 
-                      return ListTile(
-                        leading: Container(
-                          width: 40, height: 40,
-                          decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-                          child: Icon(icon, size: 20, color: color),
-                        ),
-                        title: Text(p.basename(entry.name), maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
-                        subtitle: Text(p.dirname(entry.name).isEmpty ? '' : p.dirname(entry.name),
-                            maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                        trailing: Text(formatFileSize(entry.size),
-                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                        onTap: () async {
-                          try {
-                            final result = await OpenFilex.open(entry.path);
-                            if (result.type != ResultType.done && context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Could not open: ${result.message}')),
-                              );
+                        return ListTile(
+                          leading: Container(
+                            width: 40, height: 40,
+                            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                            child: Icon(icon, size: 20, color: color),
+                          ),
+                          title: Text(p.basename(entry.name), maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white)),
+                          subtitle: Text(p.dirname(entry.name).isEmpty ? '' : p.dirname(entry.name),
+                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary)),
+                          trailing: Text(formatFileSize(entry.size),
+                              style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary)),
+                          onTap: () async {
+                            try {
+                              final result = await OpenFilex.open(entry.path);
+                              if (result.type != ResultType.done && context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Could not open: ${result.message}')),
+                                );
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error: $e')),
+                                );
+                              }
                             }
-                          } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Error: $e')),
-                              );
-                            }
-                          }
-                        },
-                      );
-                    },
-                  ),
-          ),
-        ]),
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ]),
+        ),
       ),
     );
   }
@@ -1317,16 +1905,4 @@ String formatFileSize(int bytes) {
   if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
   if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
-}
-
-class HandleBar extends StatelessWidget {
-  const HandleBar({super.key});
-  @override
-  Widget build(BuildContext context) {
-    return Center(child: Container(
-      width: 32, height: 4,
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.4), borderRadius: BorderRadius.circular(2)),
-    ));
-  }
 }

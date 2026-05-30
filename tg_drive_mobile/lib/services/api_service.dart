@@ -1,62 +1,117 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  final String baseUrl;
+  String baseUrl;
   final http.Client _client = http.Client();
+  bool serverReachable = true;
 
-  ApiService({this.baseUrl = 'http://localhost:3001'});
+  ApiService({this.baseUrl = 'http://192.168.1.100:3000'});
+
+  void updateBaseUrl(String url) {
+    baseUrl = url;
+  }
 
   Future<Map<String, dynamic>> _post(
       String path, Map<String, dynamic> body) async {
-    final resp = await _client.post(
-      Uri.parse('$baseUrl$path'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(body),
-    );
-    final data = jsonDecode(resp.body) as Map<String, dynamic>;
-    if (resp.statusCode != 200) {
-      throw Exception(data['error'] ?? 'Request failed');
+    try {
+      serverReachable = true;
+      final resp = await _client.post(
+        Uri.parse('$baseUrl$path'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      ).timeout(const Duration(seconds: 15));
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      if (resp.statusCode != 200) {
+        throw Exception(data['error'] ?? 'Request failed');
+      }
+      return data;
+    } on SocketException {
+      serverReachable = false;
+      rethrow;
+    } on TimeoutException {
+      serverReachable = false;
+      rethrow;
+    } on HttpException {
+      serverReachable = false;
+      rethrow;
     }
-    return data;
   }
 
   Future<Map<String, dynamic>> _get(String path) async {
-    final resp = await _client.get(Uri.parse('$baseUrl$path'));
-    final data = jsonDecode(resp.body) as Map<String, dynamic>;
-    if (resp.statusCode != 200) {
-      throw Exception(data['error'] ?? 'Request failed');
+    try {
+      serverReachable = true;
+      final resp = await _client.get(Uri.parse('$baseUrl$path'))
+          .timeout(const Duration(seconds: 15));
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      if (resp.statusCode != 200) {
+        throw Exception(data['error'] ?? 'Request failed');
+      }
+      return data;
+    } on SocketException {
+      serverReachable = false;
+      rethrow;
+    } on TimeoutException {
+      serverReachable = false;
+      rethrow;
+    } on HttpException {
+      serverReachable = false;
+      rethrow;
     }
-    return data;
   }
 
   Future<Map<String, dynamic>> _put(
       String path, Map<String, dynamic> body) async {
-    final resp = await _client.put(
-      Uri.parse('$baseUrl$path'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(body),
-    );
-    final data = jsonDecode(resp.body) as Map<String, dynamic>;
-    if (resp.statusCode != 200) {
-      throw Exception(data['error'] ?? 'Request failed');
+    try {
+      serverReachable = true;
+      final resp = await _client.put(
+        Uri.parse('$baseUrl$path'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      ).timeout(const Duration(seconds: 15));
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      if (resp.statusCode != 200) {
+        throw Exception(data['error'] ?? 'Request failed');
+      }
+      return data;
+    } on SocketException {
+      serverReachable = false;
+      rethrow;
+    } on TimeoutException {
+      serverReachable = false;
+      rethrow;
+    } on HttpException {
+      serverReachable = false;
+      rethrow;
     }
-    return data;
   }
 
   Future<Map<String, dynamic>> _delete(
       String path, Map<String, dynamic> body) async {
-    final req = http.Request('DELETE', Uri.parse('$baseUrl$path'));
-    req.headers['Content-Type'] = 'application/json';
-    req.body = jsonEncode(body);
-    final streamed = await _client.send(req);
-    final resp = await http.Response.fromStream(streamed);
-    final data = jsonDecode(resp.body) as Map<String, dynamic>;
-    if (resp.statusCode != 200) {
-      throw Exception(data['error'] ?? 'Request failed');
+    try {
+      serverReachable = true;
+      final req = http.Request('DELETE', Uri.parse('$baseUrl$path'));
+      req.headers['Content-Type'] = 'application/json';
+      req.body = jsonEncode(body);
+      final streamed = await _client.send(req);
+      final resp = await http.Response.fromStream(streamed);
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      if (resp.statusCode != 200) {
+        throw Exception(data['error'] ?? 'Request failed');
+      }
+      return data;
+    } on SocketException {
+      serverReachable = false;
+      rethrow;
+    } on TimeoutException {
+      serverReachable = false;
+      rethrow;
+    } on HttpException {
+      serverReachable = false;
+      rethrow;
     }
-    return data;
   }
 
   // ─── Auth ─────────────────────────────────────────────────────
