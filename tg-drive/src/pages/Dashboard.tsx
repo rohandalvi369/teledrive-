@@ -12,6 +12,9 @@ import UploadZone from '@/components/UploadZone'
 import UploadProgress from '@/components/UploadProgress'
 import FilePreview from '@/components/FilePreview'
 import SettingsModal from '@/components/SettingsModal'
+import BackupBanner from '@/components/BackupBanner'
+import SortDropdown from '@/components/SortDropdown'
+import MultiSelectBar from '@/components/MultiSelectBar'
 import { getBackupFolders, addBackupFolder, removeBackupFolder, getBackupDestFolder, setBackupDestFolder as saveBackupDestFolder, pickBackupFolder, runBackup, isTauri } from '@/lib/backup'
 import type { BackupJob } from '@/lib/backup'
 
@@ -71,7 +74,6 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
   const [activeTab, setActiveTab] = useState<FileCategory>('all')
   const [sortMode, setSortMode] = useState<string>('')
   const [showSortMenu, setShowSortMenu] = useState(false)
-  const sortRef = useRef<HTMLDivElement>(null)
   const isTrash = useMemo(() => activeFolder?.about === TAG_TRASH, [activeFolder])
   const activeId = useMemo(() => activeFolder?.id ?? '', [activeFolder])
 
@@ -97,16 +99,6 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
     }
     return result
   }, [displayFiles, searchQuery, activeTab, sortMode])
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (sortRef.current && !sortRef.current.contains(e.target as Node)) {
-        setShowSortMenu(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
 
   const refreshFolders = useCallback(async () => {
     const list = await fetchFolders()
@@ -825,114 +817,31 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
         </div>
       </header>
 
-      {backupFolders.length > 0 && (
-        <div className="h-7 px-4 flex items-center gap-2 text-[11px] border-b flex-shrink-0"
-          style={{ background: 'var(--color-surface-tertiary)', borderColor: 'var(--color-border)', color: 'var(--color-text-tertiary)' }}>
-          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-            style={{
-              background: backupPhase === 'scanning' ? '#3b82f6'
-                : backupPhase === 'uploading' ? '#22c55e'
-                : backupPhase === 'done' ? '#22c55e'
-                : '#6b7280',
-            }}
-          />
-          <span className="truncate">
-            {backupPhase === 'scanning' && 'Scanning folders for new files...'}
-            {backupPhase === 'uploading' && `Uploading ${backupStats ? `(${backupStats.uploaded} done, ${backupStats.failed} failed)` : '...'}`}
-            {backupPhase === 'done' && `Backed up · ${backupStats?.uploaded || 0} file${backupStats?.uploaded !== 1 ? 's' : ''} uploaded`}
-            {backupPhase === 'idle' && 'Auto-backup ready'}
-          </span>
-          {(backupPhase === 'scanning' || backupPhase === 'uploading') && (
-            <button
-              onClick={handleCancelBackup}
-              className="ml-auto text-zinc-500 hover:text-red-400 transition-colors flex-shrink-0"
-            >
-              Stop
-            </button>
-          )}
-        </div>
-      )}
+      <BackupBanner
+        backupFolders={backupFolders}
+        backupPhase={backupPhase}
+        backupStats={backupStats}
+        onCancel={handleCancelBackup}
+      />
 
-      {multiSelect && (
-        <div className="h-12 border-b px-4 flex items-center gap-2 flex-shrink-0" style={{ background: 'color-mix(in srgb, var(--color-accent) 6%, transparent)', borderColor: 'var(--color-border)' }}>
-          <span className="text-sm mr-2" style={{ color: 'var(--color-text-secondary)' }}>{selectedCount} selected</span>
-          <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
-          <button
-            onClick={() => {
-              selectedFilesList.forEach((f) => handleStartDownload(f.messageId))
-            }}
-            disabled={selectedCount === 0}
-            className="px-3 py-1 text-xs rounded-lg bg-indigo-500 dark:bg-indigo-600 text-white hover:bg-indigo-400 dark:hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            Download
-          </button>
-          {isTrash ? (
-            <>
-              <button
-                onClick={handleRestoreFromTrash}
-                disabled={selectedCount === 0}
-                className="px-3 py-1 text-xs rounded-lg bg-green-500/20 text-green-600 dark:text-green-400 hover:bg-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Restore
-              </button>
-              <button
-                onClick={handlePermanentDelete}
-                disabled={selectedCount === 0}
-                className="px-3 py-1 text-xs rounded-lg bg-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Delete Forever
-              </button>
-              <button
-                onClick={() => {
-                  if (!window.confirm('Permanently delete ALL files in trash?')) return
-                  handlePurgeTrash()
-                }}
-                disabled={files.length === 0}
-                className="px-3 py-1 text-xs rounded-lg bg-red-600 text-white hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ml-1"
-              >
-                Purge All
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={handleCreateZip}
-                disabled={selectedCount === 0}
-              className="px-3 py-1 text-xs rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              style={{ background: 'rgba(16,185,129,0.2)', color: 'var(--color-accent-text, #fff)' }}
-            >
-              Create Zip
-            </button>
-            <button
-              onClick={handleMove}
-              disabled={selectedCount === 0}
-              className="px-3 py-1 text-xs rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              style={{ background: 'color-mix(in srgb, var(--color-text) 10%, transparent)', color: 'var(--color-text-secondary)' }}
-            >
-              Move
-            </button>
-            <button
-              onClick={handleMoveToTrash}
-              disabled={selectedCount === 0 || activeFolder.type === 'saved'}
-              className="px-3 py-1 text-xs rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              style={{ background: 'rgba(239,68,68,0.2)', color: '#ef4444' }}
-            >
-              Move to Trash
-            </button>
-          </>
-        )}
-        <div className="flex-1" />
-        <button
-          onClick={handleExitMultiSelect}
-          className="px-3 py-1 text-xs rounded-lg transition-colors"
-          style={{ color: 'var(--color-text-tertiary)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-text)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--color-accent) 8%, transparent)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-tertiary)'; e.currentTarget.style.background = '' }}
-          >
-            Cancel
-          </button>
-        </div>
-      )}
+      <MultiSelectBar
+        multiSelect={multiSelect}
+        selectedCount={selectedCount}
+        isTrash={isTrash}
+        onDownload={() => { selectedFilesList.forEach((f) => handleStartDownload(f.messageId)) }}
+        onRestore={handleRestoreFromTrash}
+        onDeleteForever={handlePermanentDelete}
+        onPurgeAll={() => {
+          if (!window.confirm('Permanently delete ALL files in trash?')) return
+          handlePurgeTrash()
+        }}
+        onCreateZip={handleCreateZip}
+        onMove={handleMove}
+        onMoveToTrash={handleMoveToTrash}
+        onExitMultiSelect={handleExitMultiSelect}
+        filesLength={files.length}
+        activeFolderType={activeFolder.type}
+      />
 
       <div className="border-b px-4 flex items-center gap-4 flex-shrink-0" style={{ background: 'var(--color-surface-tertiary)', borderColor: 'var(--color-border)' }}>
         {(['all', 'images', 'videos', 'audio', 'docs'] as FileCategory[]).map((cat) => (
@@ -1003,53 +912,13 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
                     Empty Trash
                   </button>
                 )}
-                <div className="relative" ref={sortRef}>
-                  <button
-                    onClick={() => setShowSortMenu(!showSortMenu)}
-                    className="flex items-center gap-1 px-1.5 py-1 rounded transition-colors"
-                    style={{ color: sortMode ? 'var(--color-accent)' : 'var(--color-text-tertiary)' }}
-                    onMouseEnter={(e) => e.currentTarget.style.color = sortMode ? 'var(--color-accent)' : 'var(--color-text)'}
-                    onMouseLeave={(e) => e.currentTarget.style.color = sortMode ? 'var(--color-accent)' : 'var(--color-text-tertiary)'}
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h6M3 12h8m-8 5h5m5-10l4-4m0 0l4 4m-4-4v16" />
-                    </svg>
-                    <span className="text-[11px]">{sortMode ? sortMode.replace('-', ' · ') : 'Sort'}</span>
-                  </button>
-                  {showSortMenu && (
-                    <div className="absolute right-0 top-full mt-1 z-50 rounded-lg border shadow-lg py-1 min-w-[140px]"
-                      style={{ background: 'var(--color-modal-bg)', borderColor: 'var(--color-border)' }}>
-                      {[
-                        { value: '', label: 'Default' },
-                        { value: 'name-asc', label: 'Name A-Z' },
-                        { value: 'name-desc', label: 'Name Z-A' },
-                        { value: 'date-desc', label: 'Newest first' },
-                        { value: 'date-asc', label: 'Oldest first' },
-                        { value: 'size-desc', label: 'Largest first' },
-                        { value: 'size-asc', label: 'Smallest first' },
-                      ].map((opt) => (
-                        <button
-                          key={opt.value}
-                          onClick={() => { setSortMode(opt.value); setShowSortMenu(false) }}
-                          className="w-full flex items-center px-3 py-1.5 text-xs text-left transition-colors"
-                          style={{
-                            color: sortMode === opt.value ? 'var(--color-accent)' : 'var(--color-text)',
-                            background: sortMode === opt.value ? 'color-mix(in srgb, var(--color-accent) 8%, transparent)' : undefined,
-                          }}
-                          onMouseEnter={(e) => { if (sortMode !== opt.value) e.currentTarget.style.background = 'color-mix(in srgb, var(--color-accent) 5%, transparent)' }}
-                          onMouseLeave={(e) => { if (sortMode !== opt.value) e.currentTarget.style.background = '' }}
-                        >
-                          {opt.label}
-                          {sortMode === opt.value && (
-                            <svg className="w-3 h-3 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <SortDropdown
+                  sortMode={sortMode}
+                  showSortMenu={showSortMenu}
+                  onChange={setSortMode}
+                  onToggle={() => setShowSortMenu(!showSortMenu)}
+                  onClose={() => setShowSortMenu(false)}
+                />
               </div>
             )}
             {activeTab === 'all' && !searchQuery.trim() && !isTrash && !showRecents && (
