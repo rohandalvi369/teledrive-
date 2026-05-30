@@ -4,8 +4,12 @@ import { Api } from 'telegram/tl'
 import { CustomFile } from 'telegram/client/uploads'
 import bigInt from 'big-integer'
 
-const API_ID = 33624340
-const API_HASH = 'e91bb3030342033d159f40937522b046'
+const API_ID = Number(import.meta.env.VITE_API_ID)
+const API_HASH = import.meta.env.VITE_API_HASH
+
+if (!API_ID || !API_HASH) {
+  throw new Error('Missing VITE_API_ID or VITE_API_HASH environment variables. Copy .env.example to .env and fill in your Telegram API credentials.')
+}
 const SESSION_KEY = 'tg-drive:session'
 
 const TAG_FOLDER = 'tg-drive-folder'

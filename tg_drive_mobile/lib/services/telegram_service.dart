@@ -12,8 +12,8 @@ class TelegramService extends ChangeNotifier {
   static TelegramService? _instance;
   static TelegramService get instance => _instance!;
 
-  static const int _kApiId = 33624340;
-  static const String _kApiHash = 'e91bb3030342033d159f40937522b046';
+  static const int _kApiId = int.fromEnvironment('API_ID');
+  static const String _kApiHash = String.fromEnvironment('API_HASH');
 
   TdlibIsolate? _tdlib;
   bool _initialized = false;

@@ -14,9 +14,15 @@ const TRASH_MARKER = 'tg-drive-trash';
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-const API_ID = parseInt(process.env.API_ID || '33624340');
-const API_HASH = process.env.API_HASH || 'e91bb3030342033d159f40937522b046';
+const API_ID = parseInt(process.env.API_ID);
+const API_HASH = process.env.API_HASH;
 const PORT = parseInt(process.env.PORT || '3001');
+
+if (!API_ID || !API_HASH) {
+  console.error('Missing API_ID or API_HASH environment variables.');
+  console.error('Copy .env.example to .env and fill in your Telegram API credentials.');
+  process.exit(1);
+}
 
 const app = express();
 app.use(cors());
@@ -252,8 +258,8 @@ app.post("/folders/create", async (req, res) => {
     const { session, name } = req.body;
     const client = new TelegramClient(
       new StringSession(session),
-      33624340,
-      "e91bb3030342033d159f40937522b046",
+      API_ID,
+      API_HASH,
       { connectionRetries: 3 }
     );
     await client.connect();
