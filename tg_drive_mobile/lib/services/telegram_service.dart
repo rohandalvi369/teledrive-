@@ -126,9 +126,23 @@ class TelegramService extends ChangeNotifier {
     }
   }
 
+  Timer? _loadingTimer;
+
+  void _resetLoadingAfterTimeout() {
+    _loadingTimer?.cancel();
+    _loadingTimer = Timer(const Duration(seconds: 20), () {
+      if (_loading) {
+        _loading = false;
+        _error = 'No response from Telegram. Check your connection and try again.';
+        notifyListeners();
+      }
+    });
+  }
+
   void setPhoneNumber(String phone) {
     _loading = true;
     _error = null;
+    _resetLoadingAfterTimeout();
     notifyListeners();
     _sendRequest('setAuthenticationPhoneNumber', {
       'phone_number': phone,
@@ -145,6 +159,7 @@ class TelegramService extends ChangeNotifier {
   void checkCode(String code) {
     _loading = true;
     _error = null;
+    _resetLoadingAfterTimeout();
     notifyListeners();
     _sendRequest('checkAuthenticationCode', {'code': code});
   }
@@ -152,6 +167,7 @@ class TelegramService extends ChangeNotifier {
   void checkPassword(String password) {
     _loading = true;
     _error = null;
+    _resetLoadingAfterTimeout();
     notifyListeners();
     _sendRequest('checkAuthenticationPassword', {'password': password});
   }
@@ -323,6 +339,7 @@ class TelegramService extends ChangeNotifier {
         if (_currentStep == AuthStep.phone ||
             _currentStep == AuthStep.code ||
             _currentStep == AuthStep.password) {
+          _loadingTimer?.cancel();
           _loading = false;
         }
         notifyListeners();
@@ -333,6 +350,7 @@ class TelegramService extends ChangeNotifier {
   }
 
   void _handleAuthState(AuthorizationState state) {
+    _loadingTimer?.cancel();
     switch (state) {
       case AuthorizationStateWaitTdlibParameters():
         // Already sent during init, ignore
@@ -421,6 +439,7 @@ class TelegramService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _loadingTimer?.cancel();
     _updateSub?.cancel();
     _tdlib?.dispose();
     super.dispose();
