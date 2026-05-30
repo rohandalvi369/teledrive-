@@ -27,7 +27,7 @@ TeleDrive turns your Telegram account into a personal file server — no proxy s
 | **Telegram Client** | TDLib via `handy_tdlib` (mobile), GramJS (desktop + server) |
 | **Background Tasks** | `workmanager`, `flutter_local_notifications` |
 | **Persistence** | SharedPreferences (config), TDLib local DB (messages/files) |
-| **CI / Tooling** | GitHub Actions, Husky, Commitlint (conventional commits) |
+| **CI / Tooling** | GitHub Actions |
 
 ---
 
@@ -88,10 +88,9 @@ teledrive/
 ├── tg_drive_mobile/       # Flutter mobile app
 ├── tg-drive/              # Tauri + React desktop app
 ├── server/                # Express backend
-├── .github/workflows/     # CI (Flutter APK build, Tauri build)
-├── commitlint.config.js   # Conventional commit enforcement
-├── BRANCH_PROTECTION.md   # Feature branch workflow
-└── .husky/                # Pre-commit hooks (commitlint, secret/credential scan)
+├── .github/workflows/     # CI (Flutter APK build)
+├── .gitignore             # Env, secrets, build artifacts
+└── README.md
 ```
 
 ---
@@ -178,10 +177,8 @@ Desktop builds are triggered manually via `npm run tauri build`.
 
 ## Development Practices
 
-- **Conventional Commits** — enforced by Commitlint / Husky (`feat:`, `fix:`, `chore:`, `refactor:`, etc.)
-- **Feature Branches** — No direct pushes to `main`; documented in `BRANCH_PROTECTION.md`
 - **Secrets Policy** — API keys, tokens, and build artifacts are gitignored and env-only
-- **Atomic Commits** — One logical change per commit, imperative messages
+- **Clean Commits** — One logical change per commit, descriptive messages
 
 ---
 
