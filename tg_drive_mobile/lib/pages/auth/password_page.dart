@@ -3,7 +3,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../services/telegram_service.dart';
-import '../../theme/app_theme.dart';
 
 class PasswordPage extends StatefulWidget {
   const PasswordPage({super.key});
@@ -34,93 +33,94 @@ class _PasswordPageState extends State<PasswordPage> {
   @override
   Widget build(BuildContext context) {
     final telegram = context.watch<TelegramService>();
+    final hasPassword = _passwordController.text.isNotEmpty;
 
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: const Color(0xFF0A0A0F),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 80, height: 80,
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha: 0.15),
+                  width: 100, height: 100,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1A1A2E),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.lock_outline, size: 36, color: AppColors.accent),
-                ).animate().fadeIn(duration: 400.ms).scaleY(begin: 0.8, end: 1, curve: Curves.easeOutCubic),
-                const SizedBox(height: 24),
-                Text('Two-factor authentication',
-                    style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w600, color: Colors.white))
+                  child: const Icon(Icons.shield_outlined, size: 44, color: Color(0xFF7B61FF)),
+                ).animate().fadeIn(duration: 500.ms).scaleXY(begin: 0.7, end: 1, curve: Curves.easeOutCubic),
+                const SizedBox(height: 32),
+                Text('Two-step verification',
+                    style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.w600, color: Colors.white))
                   .animate().fadeIn(duration: 400.ms, delay: 100.ms).slideY(begin: 20, end: 0, curve: Curves.easeOutCubic),
                 const SizedBox(height: 8),
                 Text('Enter your 2FA password',
-                    style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary))
+                    style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF8B8FA8)))
                   .animate().fadeIn(duration: 400.ms, delay: 200.ms),
+                const SizedBox(height: 16),
 
-                if (telegram.hint != null) ...[
-                  const SizedBox(height: 12),
+                if (telegram.hint != null)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha: 0.1),
+                      color: const Color(0xFF7B61FF).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
+                      border: Border.all(color: const Color(0xFF7B61FF).withValues(alpha: 0.2)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.help_outline, size: 16, color: AppColors.accent),
+                        const Icon(Icons.help_outline, size: 16, color: Color(0xFF7B61FF)),
                         const SizedBox(width: 8),
                         Flexible(
                           child: Text('Hint: ${telegram.hint}',
-                              style: GoogleFonts.inter(fontSize: 13, color: AppColors.accent)),
+                              style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF7B61FF))),
                         ),
                       ],
                     ),
                   ).animate().fadeIn(duration: 300.ms).slideY(begin: -10, end: 0),
-                ],
 
                 const SizedBox(height: 24),
 
-                if (telegram.error != null)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: AppColors.error.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
-                    ),
-                    child: Text(telegram.error!,
-                        style: GoogleFonts.inter(fontSize: 13, color: AppColors.error)),
-                  ).animate().fadeIn(duration: 300.ms).slideY(begin: -10, end: 0, curve: Curves.easeOutCubic),
-
-                TextField(
-                  controller: _passwordController,
-                  focusNode: _focusNode,
-                  obscureText: _obscured,
-                  textInputAction: TextInputAction.done,
-                  style: GoogleFonts.inter(fontSize: 16, color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'Enter your 2FA password',
-                    prefixIcon: const Padding(
-                      padding: EdgeInsets.only(left: 16, right: 8),
-                      child: Icon(Icons.password, color: AppColors.textSecondary, size: 20),
-                    ),
-                    suffixIcon: IconButton(
-                      icon: Icon(_obscured ? Icons.visibility_off : Icons.visibility,
-                          color: AppColors.textSecondary, size: 20),
-                      onPressed: () => setState(() => _obscured = !_obscured),
-                    ),
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1A2E),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF2A2A3E)),
                   ),
-                  onSubmitted: (_passwordController.text.isNotEmpty && !telegram.loading)
-                      ? (v) => telegram.checkPassword(v.trim())
-                      : null,
+                  padding: const EdgeInsets.all(4),
+                  child: TextField(
+                    controller: _passwordController,
+                    focusNode: _focusNode,
+                    obscureText: _obscured,
+                    textInputAction: TextInputAction.done,
+                    style: GoogleFonts.inter(fontSize: 15, color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Enter your 2FA password',
+                      hintStyle: GoogleFonts.inter(fontSize: 15, color: const Color(0xFF8B8FA8)),
+                      prefixIcon: const Padding(
+                        padding: EdgeInsets.only(left: 16),
+                        child: Icon(Icons.lock_outline, color: Color(0xFF8B8FA8), size: 20),
+                      ),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscured ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                          color: const Color(0xFF8B8FA8), size: 20,
+                        ),
+                        onPressed: () => setState(() => _obscured = !_obscured),
+                      ),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    ),
+                    onSubmitted: (hasPassword && !telegram.loading)
+                        ? (v) => telegram.checkPassword(v.trim())
+                        : null,
+                  ),
                 ).animate().fadeIn(duration: 400.ms, delay: 300.ms).slideY(begin: 15, end: 0, curve: Curves.easeOutCubic),
                 const SizedBox(height: 24),
 
@@ -129,34 +129,28 @@ class _PasswordPageState extends State<PasswordPage> {
                   height: 56,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
-                    gradient: LinearGradient(
-                      colors: _passwordController.text.isNotEmpty && !telegram.loading
-                          ? [AppColors.gradientStart, AppColors.gradientEnd]
-                          : [AppColors.surfaceElevated, AppColors.surfaceElevated],
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF2AABEE), Color(0xFF7B61FF)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
                     ),
-                    boxShadow: _passwordController.text.isNotEmpty && !telegram.loading
-                        ? [BoxShadow(color: AppColors.primaryGlow, blurRadius: 24, spreadRadius: 1)]
+                    boxShadow: hasPassword && !telegram.loading
+                        ? [BoxShadow(color: const Color(0xFF2AABEE).withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))]
                         : null,
                   ),
                   child: Material(
                     color: Colors.transparent,
                     child: InkWell(
                       borderRadius: BorderRadius.circular(16),
-                      onTap: (_passwordController.text.isNotEmpty && !telegram.loading)
+                      onTap: (hasPassword && !telegram.loading)
                           ? () => telegram.checkPassword(_passwordController.text.trim())
                           : null,
                       child: Center(
                         child: telegram.loading
                             ? const SizedBox(width: 22, height: 22,
                                 child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                            : Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text('Sign In', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
-                                  const SizedBox(width: 8),
-                                  const Icon(Icons.login, color: Colors.white, size: 20),
-                                ],
-                              ),
+                            : Text('Verify →',
+                                style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
                       ),
                     ),
                   ),

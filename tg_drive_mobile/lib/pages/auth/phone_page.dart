@@ -3,7 +3,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../services/telegram_service.dart';
-import '../../theme/app_theme.dart';
 
 class _Country {
   final String name;
@@ -178,78 +177,77 @@ class _PhonePageState extends State<PhonePage> {
     final hasNumber = _phoneController.text.trim().replaceAll(RegExp(r'[\s\-\(\)]'), '').isNotEmpty;
 
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: const Color(0xFF0A0A0F),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                const SizedBox(height: 40),
                 Container(
-                  width: 80, height: 80,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.15),
+                  width: 100, height: 100,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1A1A2E),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.phone_android, size: 36, color: AppColors.primary),
-                ).animate().fadeIn(duration: 400.ms).scaleY(begin: 0.8, end: 1, curve: Curves.easeOutCubic),
-                const SizedBox(height: 24),
-                Text('Enter your phone number',
-                    style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w600, color: Colors.white))
-                  .animate().fadeIn(duration: 400.ms, delay: 100.ms).slideY(begin: 20, end: 0, curve: Curves.easeOutCubic),
-                const SizedBox(height: 8),
-                Text("You'll receive a verification code in Telegram",
-                    style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary))
-                  .animate().fadeIn(duration: 400.ms, delay: 200.ms),
+                  child: const Icon(Icons.cloud, size: 48, color: Color(0xFF2AABEE)),
+                ).animate().fadeIn(duration: 500.ms).scaleXY(begin: 0.7, end: 1, curve: Curves.easeOutCubic),
                 const SizedBox(height: 32),
-
-                if (telegram.error != null)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: AppColors.error.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
-                    ),
-                    child: Text(telegram.error!,
-                        style: GoogleFonts.inter(fontSize: 13, color: AppColors.error)),
-                  ).animate().fadeIn(duration: 300.ms).slideY(begin: -10, end: 0, curve: Curves.easeOutCubic),
+                Text('TeleDrive',
+                    style: GoogleFonts.inter(fontSize: 32, fontWeight: FontWeight.w600, color: Colors.white))
+                  .animate().fadeIn(duration: 400.ms, delay: 150.ms).slideY(begin: 20, end: 0, curve: Curves.easeOutCubic),
+                const SizedBox(height: 8),
+                Text('Your Telegram Cloud',
+                    style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF8B8FA8)))
+                  .animate().fadeIn(duration: 400.ms, delay: 250.ms),
+                const SizedBox(height: 48),
 
                 Container(
                   decoration: BoxDecoration(
+                    color: const Color(0xFF1A1A2E),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(color: const Color(0xFF2A2A3E)),
                   ),
+                  padding: const EdgeInsets.all(4),
                   child: Row(
                     children: [
-                      _CountryCodeButton(
-                        flag: _selectedCountry.flag,
-                        dialCode: _selectedCountry.dialCode,
+                      GestureDetector(
                         onTap: _openCountryPicker,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('${_selectedCountry.dialCode} ${_selectedCountry.flag}',
+                                  style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w500, color: Colors.white)),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF8B8FA8)),
+                            ],
+                          ),
+                        ),
                       ),
-                      Container(width: 1, height: 32, color: AppColors.border),
+                      Container(width: 1, height: 28, color: const Color(0xFF2A2A3E)),
                       Expanded(
                         child: TextField(
                           controller: _phoneController,
                           focusNode: _focusNode,
                           keyboardType: TextInputType.phone,
-                          style: GoogleFonts.inter(fontSize: 16, color: Colors.white),
+                          style: GoogleFonts.inter(fontSize: 15, color: Colors.white),
                           decoration: InputDecoration(
                             hintText: 'Phone number',
-                            hintStyle: GoogleFonts.inter(fontSize: 16, color: AppColors.textSecondary.withValues(alpha: 0.5)),
+                            hintStyle: GoogleFonts.inter(fontSize: 15, color: const Color(0xFF8B8FA8)),
                             border: InputBorder.none,
                             enabledBorder: InputBorder.none,
                             focusedBorder: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                           ),
                         ),
                       ),
                     ],
                   ),
-                ).animate().fadeIn(duration: 400.ms, delay: 300.ms).slideY(begin: 15, end: 0, curve: Curves.easeOutCubic),
+                ).animate().fadeIn(duration: 400.ms, delay: 350.ms).slideY(begin: 15, end: 0, curve: Curves.easeOutCubic),
                 const SizedBox(height: 24),
 
                 Container(
@@ -257,13 +255,13 @@ class _PhonePageState extends State<PhonePage> {
                   height: 56,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
-                    gradient: LinearGradient(
-                      colors: hasNumber && !telegram.loading
-                          ? [AppColors.gradientStart, AppColors.gradientEnd]
-                          : [AppColors.surfaceElevated, AppColors.surfaceElevated],
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF2AABEE), Color(0xFF7B61FF)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
                     ),
                     boxShadow: hasNumber && !telegram.loading
-                        ? [BoxShadow(color: AppColors.primaryGlow, blurRadius: 24, spreadRadius: 1)]
+                        ? [BoxShadow(color: const Color(0xFF2AABEE).withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))]
                         : null,
                   ),
                   child: Material(
@@ -275,66 +273,20 @@ class _PhonePageState extends State<PhonePage> {
                         child: telegram.loading
                             ? const SizedBox(width: 22, height: 22,
                                 child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                            : Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text('Continue', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
-                                  const SizedBox(width: 8),
-                                  const Icon(Icons.arrow_forward, color: Colors.white, size: 20),
-                                ],
-                              ),
+                            : Text('Continue →',
+                                style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
                       ),
                     ),
                   ),
-                ).animate().fadeIn(duration: 400.ms, delay: 400.ms).slideY(begin: 15, end: 0, curve: Curves.easeOutCubic),
+                ).animate().fadeIn(duration: 400.ms, delay: 450.ms).slideY(begin: 15, end: 0, curve: Curves.easeOutCubic),
+                const SizedBox(height: 24),
+                Text('By continuing you agree to our Privacy Policy',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF8B8FA8)))
+                  .animate().fadeIn(duration: 400.ms, delay: 550.ms),
+                const SizedBox(height: 40),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CountryCodeButton extends StatelessWidget {
-  final String flag;
-  final String dialCode;
-  final VoidCallback onTap;
-
-  const _CountryCodeButton({
-    required this.flag,
-    required this.dialCode,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(16),
-          bottomLeft: Radius.circular(16),
-        ),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(16),
-              bottomLeft: Radius.circular(16),
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(flag, style: const TextStyle(fontSize: 24)),
-              const SizedBox(width: 8),
-              Text(dialCode,
-                  style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
-              const SizedBox(width: 4),
-              Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: AppColors.textSecondary),
-            ],
           ),
         ),
       ),
@@ -392,7 +344,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
     return Container(
       height: MediaQuery.of(context).size.height * 0.75,
       decoration: const BoxDecoration(
-        color: AppColors.surface,
+        color: Color(0xFF12121A),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
@@ -401,7 +353,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
             margin: const EdgeInsets.symmetric(vertical: 12),
             width: 40, height: 4,
             decoration: BoxDecoration(
-              color: AppColors.textSecondary.withValues(alpha: 0.3),
+              color: const Color(0xFF8B8FA8).withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -412,7 +364,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                 Text('Select Country', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
                 const Spacer(),
                 IconButton(
-                  icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
+                  icon: const Icon(Icons.close_rounded, color: Color(0xFF8B8FA8)),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
@@ -422,17 +374,17 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Container(
               decoration: BoxDecoration(
-                color: AppColors.surfaceElevated,
+                color: const Color(0xFF1A1A2E),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: const Color(0xFF2A2A3E)),
               ),
               child: TextField(
                 controller: _searchCtrl,
                 style: GoogleFonts.inter(fontSize: 14, color: Colors.white),
                 decoration: InputDecoration(
                   hintText: 'Search countries...',
-                  hintStyle: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary.withValues(alpha: 0.5)),
-                  prefixIcon: Icon(Icons.search_rounded, size: 20, color: AppColors.textSecondary),
+                  hintStyle: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF8B8FA8).withValues(alpha: 0.5)),
+                  prefixIcon: Icon(Icons.search_rounded, size: 20, color: const Color(0xFF8B8FA8)),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
@@ -446,7 +398,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
             child: _filtered.isEmpty
                 ? Center(
                     child: Text('No countries found',
-                        style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary)),
+                        style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF8B8FA8))),
                   )
                 : ListView.builder(
                     controller: _scrollCtrl,
@@ -459,7 +411,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                       return Container(
                         margin: const EdgeInsets.symmetric(vertical: 2),
                         decoration: BoxDecoration(
-                          color: isSelected ? AppColors.primary.withValues(alpha: 0.1) : Colors.transparent,
+                          color: isSelected ? const Color(0xFF2AABEE).withValues(alpha: 0.1) : Colors.transparent,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: InkWell(
@@ -476,18 +428,18 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500,
-                                          color: isSelected ? AppColors.primary : Colors.white)),
+                                          color: isSelected ? const Color(0xFF2AABEE) : Colors.white)),
                                 ),
                                 const SizedBox(width: 8),
                                 Text(country.dialCode,
                                     style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600,
-                                        color: AppColors.textSecondary)),
+                                        color: const Color(0xFF8B8FA8))),
                                 if (isSelected) ...[
                                   const SizedBox(width: 8),
                                   Container(
                                     width: 24, height: 24,
                                     decoration: const BoxDecoration(
-                                      color: AppColors.primary,
+                                      color: Color(0xFF2AABEE),
                                       shape: BoxShape.circle,
                                     ),
                                     child: const Icon(Icons.check_rounded, size: 16, color: Colors.white),
