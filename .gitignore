@@ -44,5 +44,11 @@ tg_drive_mobile/ARCHITECTURE.md
 credentials.*
 secrets.*
 
+# Build artifacts — commit only intentionally
+*.apk
+*.exe
+*.msi
+*.dmg
+
 # Logs
 *.log
