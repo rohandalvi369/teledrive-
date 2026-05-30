@@ -84,6 +84,14 @@ class TelegramService extends ChangeNotifier {
 
       _updateSub = _tdlib!.updates.listen(_processUpdate);
 
+      if (_kApiId == 0 || _kApiHash.isEmpty) {
+        _error = 'Missing API credentials. Build with --dart-define=API_ID=... --dart-define=API_HASH=...';
+        _loading = false;
+        _currentStep = AuthStep.phone;
+        notifyListeners();
+        return;
+      }
+
       try {
         await _tdlib!.start(
           apiId: _kApiId,
@@ -92,7 +100,7 @@ class TelegramService extends ChangeNotifier {
         );
       } catch (e) {
         final msg = e.toString();
-        if (msg.contains('already in use') || msg.contains('td.binlog') || msg.contains('400')) {
+        if (msg.contains('already in use') || msg.contains('td.binlog')) {
           // Lock file issue — dispose and recreate once
           try { _tdlib!.dispose(); } catch (_) {}
           _tdlib = TdlibIsolate();
@@ -284,13 +292,21 @@ class TelegramService extends ChangeNotifier {
         final code = err.code;
 
         if (message.contains('PHONE_NUMBER_INVALID')) {
-          _error = 'Invalid phone number';
+          _error = 'Invalid phone number. Include country code (e.g. +1...)';
         } else if (message.contains('PHONE_CODE_INVALID')) {
           _error = 'Invalid verification code';
+        } else if (message.contains('PHONE_CODE_EMPTY')) {
+          _error = 'Verification code is empty';
+        } else if (message.contains('PHONE_CODE_EXPIRED')) {
+          _error = 'Verification code expired. Request a new one.';
+        } else if (message.contains('PHONE_NUMBER_FLOOD')) {
+          _error = 'Too many requests. Wait a few minutes and try again.';
+        } else if (message.contains('PHONE_NUMBER_BANNED')) {
+          _error = 'This phone number is banned from Telegram';
         } else if (message.contains('PASSWORD_HASH_INVALID')) {
           _error = 'Invalid 2FA password';
         } else if (message.contains('API_ID_INVALID')) {
-          _error = 'Invalid API ID';
+          _error = 'Invalid API ID. Check your --dart-define values.';
         } else if (code == 429) {
           _error = 'Too many attempts. Try again later.';
         } else if (message.contains('SESSION_PASSWORD_NEEDED')) {
@@ -301,7 +317,7 @@ class TelegramService extends ChangeNotifier {
           notifyListeners();
           return;
         } else {
-          _error = 'Error [$code]: $message';
+          _error = message.contains('400') ? message : 'Error [$code]: $message';
         }
 
         if (_currentStep == AuthStep.phone ||
