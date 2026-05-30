@@ -9,7 +9,6 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:archive/archive.dart';
-import 'package:path/path.dart' as p;
 import '../services/telegram_service.dart';
 import '../services/file_service.dart';
 import '../services/api_service.dart';
@@ -18,6 +17,13 @@ import '../services/favorites_service.dart';
 import '../models/drive_folder.dart';
 import '../models/drive_file.dart';
 import '../widgets/shimmer_list.dart';
+import '../widgets/cloud_painter.dart';
+import '../widgets/section_header.dart';
+import '../widgets/folder_picker_sheet.dart';
+import '../widgets/multi_upload_sheet.dart';
+import '../widgets/upload_progress_sheet.dart';
+import '../widgets/download_progress_sheet.dart';
+import '../widgets/zip_content_sheet.dart';
 import '../theme/app_theme.dart';
 import 'image_preview_page.dart';
 import 'video_preview_page.dart';
@@ -77,7 +83,6 @@ class _DashboardPageState extends State<DashboardPage>
     super.dispose();
   }
 
-  // ─── Data Loading ──────────────────────────────────────────────
 
   Future<void> _loadStats() async {
     try {
@@ -118,7 +123,6 @@ class _DashboardPageState extends State<DashboardPage>
     } catch (_) {}
   }
 
-  // ─── Multi Select ──────────────────────────────────────────────
 
   void _exitMultiSelect() {
     setState(() {
@@ -145,7 +149,6 @@ class _DashboardPageState extends State<DashboardPage>
     });
   }
 
-  // ─── Search / Sort ────────────────────────────────────────────
 
   List<DriveFile> _applySearch(List<DriveFile> files) {
     if (_searchQuery.isEmpty) return files;
@@ -168,7 +171,6 @@ class _DashboardPageState extends State<DashboardPage>
     return sorted;
   }
 
-  // ─── Upload ───────────────────────────────────────────────────
 
   Future<String> _copyToTemp(PlatformFile file) async {
     final dir = Directory.systemTemp.createTempSync('upload_');
@@ -219,7 +221,7 @@ class _DashboardPageState extends State<DashboardPage>
   ) async {
     await showModalBottomSheet(
       context: ctx, enableDrag: false, isDismissible: false,
-      builder: (_) => _MultiUploadSheet(fs: fs, folder: folder, files: files),
+      builder: (_) => MultiUploadSheet(fs: fs, folder: folder, files: files),
     );
   }
 
@@ -228,11 +230,10 @@ class _DashboardPageState extends State<DashboardPage>
   ) async {
     await showModalBottomSheet(
       context: ctx, enableDrag: false, isDismissible: false,
-      builder: (_) => _UploadProgressSheet(fs: fs, folder: folder, path: path),
+      builder: (_) => UploadProgressSheet(fs: fs, folder: folder, path: path),
     );
   }
 
-  // ─── Download / Preview ───────────────────────────────────────
 
   Future<void> _downloadAndPreview(
     BuildContext ctx, FileService fs, DriveFile file, {
@@ -242,7 +243,7 @@ class _DashboardPageState extends State<DashboardPage>
       if (!file.isDownloaded) {
         final path = await showModalBottomSheet<String>(
           context: ctx, enableDrag: false, isDismissible: false,
-          builder: (_) => _DownloadProgressSheet(fs: fs, file: file),
+          builder: (_) => DownloadProgressSheet(fs: fs, file: file),
         );
         if (path == null || !mounted) return;
       }
@@ -255,7 +256,7 @@ class _DashboardPageState extends State<DashboardPage>
     if (file.isDownloaded) { _openFile(ctx, file); return; }
     final path = await showModalBottomSheet<String>(
       context: ctx, enableDrag: false, isDismissible: false,
-      builder: (_) => _DownloadProgressSheet(fs: fs, file: file),
+      builder: (_) => DownloadProgressSheet(fs: fs, file: file),
     );
     if (path != null && mounted) { file.localPath = path; _openFile(ctx, file); }
   }
@@ -276,7 +277,6 @@ class _DashboardPageState extends State<DashboardPage>
     }
   }
 
-  // ─── Multi-Select Actions ─────────────────────────────────────
 
   Future<void> _downloadSelected(FileService fs) async {
     for (final file in _selectedFiles) {
@@ -318,7 +318,7 @@ class _DashboardPageState extends State<DashboardPage>
   Future<void> _moveSelected(FileService fs) async {
     final targetFolder = await showModalBottomSheet<DriveFolder>(
       context: context,
-      builder: (ctx) => _FolderPickerSheet(folders: fs.folders.where((f) => f.id != fs.activeFolder?.id).toList()),
+      builder: (ctx) => FolderPickerSheet(folders: fs.folders.where((f) => f.id != fs.activeFolder?.id).toList()),
     );
     if (targetFolder == null) return;
     for (final file in _selectedFiles) await fs.forwardMessage(file, targetFolder);
@@ -368,7 +368,7 @@ class _DashboardPageState extends State<DashboardPage>
     if (!file.isDownloaded) {
       final path = await showModalBottomSheet<String>(
         context: ctx, enableDrag: false, isDismissible: false,
-        builder: (_) => _DownloadProgressSheet(fs: fs, file: file),
+        builder: (_) => DownloadProgressSheet(fs: fs, file: file),
       );
       if (path == null || !mounted) return;
       file.localPath = path;
@@ -379,7 +379,7 @@ class _DashboardPageState extends State<DashboardPage>
       final bytes = await File(file.localPath!).readAsBytes();
       final archive = ZipDecoder().decodeBytes(bytes);
       final extractDir = Directory.systemTemp.createTempSync('extract_${file.messageId}_');
-      final extracted = <_ZipEntry>[];
+      final extracted = <ZipEntry>[];
 
       for (final entry in archive) {
         if (entry.isFile) {
@@ -387,14 +387,14 @@ class _DashboardPageState extends State<DashboardPage>
           final outFile = File(outPath);
           outFile.parent.createSync(recursive: true);
           await outFile.writeAsBytes(entry.content as List<int>);
-          extracted.add(_ZipEntry(name: entry.name, path: outPath, size: entry.size, isFile: true));
+          extracted.add(ZipEntry(name: entry.name, path: outPath, size: entry.size, isFile: true));
         }
       }
 
       if (!mounted) return;
       showModalBottomSheet(
         context: ctx, isScrollControlled: true,
-        builder: (_) => _ZipContentSheet(zipFileName: file.fileName, entries: extracted),
+        builder: (_) => ZipContentSheet(zipFileName: file.fileName, entries: extracted),
       );
     } catch (e) {
       if (mounted) {
@@ -403,7 +403,6 @@ class _DashboardPageState extends State<DashboardPage>
     }
   }
 
-  // ─── Format Helpers ───────────────────────────────────────────
 
   String _formatSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
@@ -435,7 +434,6 @@ class _DashboardPageState extends State<DashboardPage>
     return '$min:$sec';
   }
 
-  // ─── Build ────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -639,7 +637,6 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  // ─── Drawer ───────────────────────────────────────────────────
 
   Widget _buildDrawer(BuildContext context, FileService fs, ThemeData theme) {
     final telegram = context.read<TelegramService>();
@@ -816,7 +813,6 @@ class _DashboardPageState extends State<DashboardPage>
     return '${(n / 1000000).toStringAsFixed(1)}M';
   }
 
-  // ─── Folder Dialogs ───────────────────────────────────────────
 
   void _showCreateFolderDialog(BuildContext context, FileService fs) {
     final ctrl = TextEditingController();
@@ -878,7 +874,6 @@ class _DashboardPageState extends State<DashboardPage>
     ));
   }
 
-  // ─── Body ─────────────────────────────────────────────────────
 
   Widget _buildBody(BuildContext context, FileService fs, ThemeData theme) {
     final api = context.watch<ApiService>();
@@ -906,7 +901,6 @@ class _DashboardPageState extends State<DashboardPage>
 
     return Column(
       children: [
-        // ─── Server Unreachable Banner ──────────────────────
         if (!api.serverReachable)
           Container(
             width: double.infinity,
@@ -922,7 +916,6 @@ class _DashboardPageState extends State<DashboardPage>
             ]),
           ),
 
-        // ─── Tab Bar ────────────────────────────────────────
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           decoration: BoxDecoration(
@@ -954,7 +947,6 @@ class _DashboardPageState extends State<DashboardPage>
           ),
         ),
 
-        // ─── File Count Bar ─────────────────────────────────
         if (activeFiles.isNotEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
@@ -1040,7 +1032,6 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  // ─── Stats Card ───────────────────────────────────────────────
 
   Widget _buildStatsCard(ThemeData theme) {
     if (_stats == null) return const SizedBox.shrink();
@@ -1105,7 +1096,6 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  // ─── Tab Builders ─────────────────────────────────────────────
 
   Widget _buildAllTab(BuildContext context, FileService fs, List<DriveFile> files, ThemeData theme) {
     final images = files.where((f) => f.isImage).toList();
@@ -1128,7 +1118,7 @@ class _DashboardPageState extends State<DashboardPage>
         children: [
           _buildStatsCard(theme),
           ...sections.entries.expand((entry) => [
-            _SectionHeader(title: entry.key, count: entry.value.length),
+            SectionHeader(title: entry.key, count: entry.value.length),
             ...entry.value.map((f) => _buildFileRow(context, fs, f)),
           ]),
           if (sections.isEmpty) _emptyState(context),
@@ -1215,7 +1205,7 @@ class _DashboardPageState extends State<DashboardPage>
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         children: sections.entries.expand((entry) => [
-          _SectionHeader(title: entry.key, count: entry.value.length),
+          SectionHeader(title: entry.key, count: entry.value.length),
           ...entry.value.map((f) => _buildFavItem(context, f)),
         ]).toList(),
       ),
@@ -1282,7 +1272,6 @@ class _DashboardPageState extends State<DashboardPage>
 
   Future<void> _emptyRefresh() async {}
 
-  // ─── Item Builders ────────────────────────────────────────────
 
   Widget _buildImageGridItem(BuildContext context, FileService fs, DriveFile file, List<DriveFile> allImages, int index) {
     final selected = _selectedFiles.contains(file);
@@ -1479,7 +1468,7 @@ class _DashboardPageState extends State<DashboardPage>
         decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.05), shape: BoxShape.circle),
         child: CustomPaint(
           size: const Size(100, 100),
-          painter: _CloudPainter(),
+          painter: CloudPainter(),
         ),
       ),
       const SizedBox(height: 16),
@@ -1516,468 +1505,4 @@ class _DashboardPageState extends State<DashboardPage>
       ],
     ]));
   }
-}
-
-class _CloudPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = AppColors.primary.withValues(alpha: 0.2)
-      ..style = PaintingStyle.fill;
-
-    final path = Path();
-    final cx = size.width / 2;
-    final cy = size.height / 2 + 4;
-    final r = size.width * 0.25;
-
-    path.addOval(Rect.fromCircle(center: Offset(cx, cy), radius: r));
-    path.addOval(Rect.fromCircle(center: Offset(cx - r * 0.7, cy + r * 0.1), radius: r * 0.75));
-    path.addOval(Rect.fromCircle(center: Offset(cx + r * 0.7, cy + r * 0.1), radius: r * 0.65));
-    path.addOval(Rect.fromCircle(center: Offset(cx - r * 0.35, cy - r * 0.4), radius: r * 0.55));
-    path.addOval(Rect.fromCircle(center: Offset(cx + r * 0.35, cy - r * 0.35), radius: r * 0.5));
-
-    canvas.drawPath(Path.combine(PathOperation.union, path, Path()), paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-// ─── Grid Thumbnail ───────────────────────────────────────────
-
-class _GridThumbnail extends StatefulWidget {
-  final String base64;
-  const _GridThumbnail({required this.base64});
-
-  @override
-  State<_GridThumbnail> createState() => _GridThumbnailState();
-}
-
-class _GridThumbnailState extends State<_GridThumbnail> {
-  Uint8List? _bytes;
-  bool _errored = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  @override
-  void didUpdateWidget(_GridThumbnail old) {
-    super.didUpdateWidget(old);
-    if (widget.base64 != old.base64) {
-      _bytes = null;
-      _errored = false;
-      _load();
-    }
-  }
-
-  Future<void> _load() async {
-    try {
-      final bytes = await compute(base64Decode, widget.base64);
-      if (mounted) setState(() => _bytes = bytes);
-    } catch (_) {
-      if (mounted) setState(() => _errored = true);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_bytes == null || _errored) {
-      return Container(
-        color: AppColors.surfaceElevated,
-        child: const Center(child: Icon(Icons.image_rounded, size: 28, color: AppColors.textSecondary)),
-      );
-    }
-    return Image.memory(
-      _bytes!,
-      fit: BoxFit.cover,
-      cacheWidth: 200,
-      cacheHeight: 200,
-      filterQuality: FilterQuality.low,
-      errorBuilder: (_, __, ___) => Container(
-        color: AppColors.surfaceElevated,
-        child: const Center(child: Icon(Icons.image_rounded, size: 28, color: AppColors.textSecondary)),
-      ),
-    );
-  }
-}
-
-// ─── Section Header ─────────────────────────────────────────────
-
-class _SectionHeader extends StatelessWidget {
-  final String title; final int count;
-  const _SectionHeader({required this.title, required this.count});
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-      child: Row(children: [
-        Text(title, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.primary)),
-        const SizedBox(width: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text('$count', style: GoogleFonts.inter(fontSize: 11, color: AppColors.primary)),
-        ),
-      ]),
-    );
-  }
-}
-
-// ─── Folder Picker Sheet ───────────────────────────────────────
-
-class _FolderPickerSheet extends StatelessWidget {
-  final List<DriveFolder> folders;
-  const _FolderPickerSheet({required this.folders});
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Padding(padding: const EdgeInsets.all(16), child: Text('Move to folder',
-          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white))),
-      if (folders.isEmpty) const Padding(padding: EdgeInsets.all(24), child: Text('No other folders available'))
-      else ...folders.map((f) => ListTile(
-        leading: Icon(f.type == 'saved' ? Icons.save_rounded : Icons.folder_rounded,
-            color: AppColors.textSecondary, size: 22),
-        title: Text(f.title, style: GoogleFonts.inter(fontSize: 14, color: Colors.white)),
-        onTap: () => Navigator.pop(context, f),
-      )),
-      const SizedBox(height: 8),
-    ]));
-  }
-}
-
-// ─── Multi-File Upload Sheet ───────────────────────────────────
-
-class _MultiUploadSheet extends StatefulWidget {
-  final FileService fs; final DriveFolder folder; final List<PlatformFile> files;
-  const _MultiUploadSheet({required this.fs, required this.folder, required this.files});
-  @override
-  State<_MultiUploadSheet> createState() => _MultiUploadSheetState();
-}
-
-class _MultiUploadSheetState extends State<_MultiUploadSheet> {
-  final Map<int, double> _progress = {};
-  int _completed = 0; int _failed = 0; bool _done = false;
-
-  @override
-  void initState() { super.initState(); _startUploads(); }
-
-  Future<void> _startUploads() async {
-    for (int i = 0; i < widget.files.length; i++) {
-      final file = widget.files[i];
-      try {
-        final tempDir = Directory.systemTemp.createTempSync('multi_upload_');
-        final destPath = '${tempDir.path}/${file.name}';
-        if (file.bytes != null) {
-          await File(destPath).writeAsBytes(file.bytes!);
-        } else if (file.path != null) {
-          final bytes = await File(file.path!).readAsBytes();
-          await File(destPath).writeAsBytes(bytes);
-        } else {
-          setState(() => _failed++);
-          continue;
-        }
-        widget.fs.startUploadTracking(file.name);
-        setState(() => _progress[i] = 0);
-        await widget.fs.uploadFile(widget.folder, destPath);
-        setState(() { _progress[i] = 1.0; _completed++; });
-      } catch (e) { setState(() { _progress[i] = -1; _failed++; }); }
-    }
-    if (mounted) { setState(() => _done = true); await Future.delayed(const Duration(seconds: 1)); if (mounted) Navigator.pop(context); }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final total = widget.files.length;
-    final pct = total > 0 ? (_completed + _failed) / total : 0.0;
-    return Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Icon(_done ? Icons.check_circle_rounded : Icons.cloud_upload_rounded,
-            color: _done ? AppColors.success : AppColors.primary, size: 24),
-        const SizedBox(width: 12),
-        Text(_done ? 'Upload complete' : 'Uploading ${widget.files.length} files...',
-            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
-      ]),
-      const SizedBox(height: 12),
-      ClipRRect(
-        borderRadius: BorderRadius.circular(4),
-        child: LinearProgressIndicator(value: _done ? 1.0 : pct, minHeight: 4,
-            backgroundColor: AppColors.surfaceElevated, color: AppColors.primary),
-      ),
-      const SizedBox(height: 8),
-      Text('$_completed done · $_failed failed · ${total - _completed - _failed} remaining',
-          style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
-      const SizedBox(height: 12),
-      SizedBox(height: 160, child: ListView.separated(itemCount: widget.files.length, separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.border),
-        itemBuilder: (context, index) {
-          final file = widget.files[index]; final progress = _progress[index];
-          return ListTile(dense: true, leading: Icon(
-            progress == 1.0 ? Icons.check_circle_rounded : progress == -1 ? Icons.error_rounded : Icons.hourglass_empty_rounded,
-            size: 18,
-            color: progress == 1.0 ? AppColors.success : progress == -1 ? AppColors.error : AppColors.textSecondary),
-            title: Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(fontSize: 13, color: Colors.white)),
-            trailing: progress != null && progress >= 0
-                ? SizedBox(width: 60, child: LinearProgressIndicator(value: progress, minHeight: 4,
-                    backgroundColor: AppColors.surfaceElevated, color: AppColors.primary))
-                : progress == -1 ? const Icon(Icons.error_rounded, size: 16, color: AppColors.error) : null);
-        },
-      )),
-    ]));
-  }
-}
-
-// ─── Upload Progress Sheet ─────────────────────────────────────
-
-class _UploadProgressSheet extends StatefulWidget {
-  final FileService fs; final DriveFolder folder; final String path;
-  const _UploadProgressSheet({required this.fs, required this.folder, required this.path});
-  @override
-  State<_UploadProgressSheet> createState() => _UploadProgressSheetState();
-}
-
-class _UploadProgressSheetState extends State<_UploadProgressSheet> {
-  bool _completed = false; String? _error;
-  @override
-  void initState() { super.initState(); _startUpload(); }
-  Future<void> _startUpload() async {
-    try {
-      await widget.fs.uploadFile(widget.folder, widget.path);
-      if (mounted) { setState(() => _completed = true); await Future.delayed(const Duration(seconds: 1)); if (mounted) Navigator.pop(context); }
-    } catch (e) { if (mounted) setState(() => _error = e.toString()); }
-  }
-  @override
-  Widget build(BuildContext context) {
-    final telegram = context.watch<TelegramService>();
-    final fileName = widget.path.split('/').last;
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(
-          _completed ? Icons.check_circle_rounded : _error != null ? Icons.error_rounded : Icons.cloud_upload_rounded,
-          size: 48,
-          color: _completed ? AppColors.success : _error != null ? AppColors.error : AppColors.primary,
-        ),
-        const SizedBox(height: 16),
-        Text(_completed ? 'Upload complete' : _error != null ? 'Upload failed' : 'Uploading...',
-            style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
-        const SizedBox(height: 8),
-        Text(fileName, style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
-            maxLines: 1, overflow: TextOverflow.ellipsis),
-        const SizedBox(height: 16),
-        if (_error == null)
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: _completed ? 1.0 : telegram.uploadProgress,
-              minHeight: 4,
-              backgroundColor: AppColors.surfaceElevated,
-              color: AppColors.primary,
-            ),
-          ),
-        if (_error != null) ...[
-          const SizedBox(height: 8),
-          Text(_error!, style: GoogleFonts.inter(fontSize: 13, color: AppColors.error), textAlign: TextAlign.center),
-        ],
-        const SizedBox(height: 8),
-        Text(_completed ? '100%' : _error != null ? '' : '${(telegram.uploadProgress * 100).toInt()}%',
-            style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
-        const SizedBox(height: 24),
-      ]),
-    );
-  }
-}
-
-// ─── Download Progress Sheet ───────────────────────────────────
-
-class _DownloadProgressSheet extends StatefulWidget {
-  final FileService fs; final DriveFile file;
-  const _DownloadProgressSheet({required this.fs, required this.file});
-  @override
-  State<_DownloadProgressSheet> createState() => _DownloadProgressSheetState();
-}
-
-class _DownloadProgressSheetState extends State<_DownloadProgressSheet> {
-  bool _completed = false; String? _error; String? _resultPath;
-  @override
-  void initState() { super.initState(); _startDownload(); }
-  Future<void> _startDownload() async {
-    try {
-      final path = await widget.fs.downloadFile(widget.file);
-      if (mounted) {
-        if (path != null) {
-          _resultPath = path;
-          setState(() => _completed = true);
-          await Future.delayed(const Duration(milliseconds: 500));
-          if (mounted) Navigator.pop(context, _resultPath);
-        } else setState(() => _error = 'Download failed');
-      }
-    } catch (e) { if (mounted) setState(() => _error = e.toString()); }
-  }
-  @override
-  Widget build(BuildContext context) {
-    final telegram = context.watch<TelegramService>();
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(
-          _completed ? Icons.check_circle_rounded : _error != null ? Icons.error_rounded : Icons.cloud_download_rounded,
-          size: 48,
-          color: _completed ? AppColors.success : _error != null ? AppColors.error : AppColors.primary,
-        ),
-        const SizedBox(height: 16),
-        Text(_completed ? 'Download complete' : _error != null ? 'Download failed' : 'Downloading...',
-            style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
-        const SizedBox(height: 8),
-        Text(widget.file.fileName, style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
-            maxLines: 1, overflow: TextOverflow.ellipsis),
-        const SizedBox(height: 16),
-        if (_error == null)
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: _completed ? 1.0 : telegram.downloadProgress,
-              minHeight: 4,
-              backgroundColor: AppColors.surfaceElevated,
-              color: AppColors.primary,
-            ),
-          ),
-        if (_error != null) ...[
-          const SizedBox(height: 8),
-          Text(_error!, style: GoogleFonts.inter(fontSize: 13, color: AppColors.error), textAlign: TextAlign.center),
-        ],
-        const SizedBox(height: 8),
-        Text(_completed ? '100%' : _error != null ? '' : '${(telegram.downloadProgress * 100).toInt()}%',
-            style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
-        const SizedBox(height: 24),
-      ]),
-    );
-  }
-}
-
-// ─── Zip Extract ────────────────────────────────────────────────
-
-class _ZipEntry {
-  final String name;
-  final String path;
-  final int size;
-  final bool isFile;
-  const _ZipEntry({required this.name, required this.path, required this.size, required this.isFile});
-}
-
-class _ZipContentSheet extends StatelessWidget {
-  final String zipFileName;
-  final List<_ZipEntry> entries;
-  const _ZipContentSheet({required this.zipFileName, required this.entries});
-
-  @override
-  Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.7,
-      minChildSize: 0.4,
-      maxChildSize: 0.95,
-      expand: false,
-      builder: (context, scrollController) => Padding(
-        padding: const EdgeInsets.only(top: 12),
-        child: Container(
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(children: [
-            Container(
-              width: 32, height: 4,
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(color: AppColors.textSecondary.withValues(alpha: 0.4), borderRadius: BorderRadius.circular(2)),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(children: [
-                const Icon(Icons.unarchive_rounded, color: AppColors.primary, size: 22),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(p.basename(zipFileName),
-                      style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                ),
-                Text('${entries.length} files', style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
-              ]),
-            ),
-            const Divider(height: 1, color: AppColors.border),
-            Expanded(
-              child: entries.isEmpty
-                  ? Center(child: Text('Empty archive', style: GoogleFonts.inter(color: AppColors.textSecondary)))
-                  : ListView.separated(
-                      controller: scrollController,
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      itemCount: entries.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1, indent: 56, color: AppColors.border),
-                      itemBuilder: (context, index) {
-                        final entry = entries[index];
-                        final ext = p.extension(entry.name).toLowerCase();
-                        IconData icon; Color color;
-                        if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].contains(ext)) {
-                          icon = Icons.image_rounded; color = AppColors.primary;
-                        } else if (['.mp4', '.mov', '.avi', '.mkv'].contains(ext)) {
-                          icon = Icons.videocam_rounded; color = AppColors.accent;
-                        } else if (['.mp3', '.wav', '.aac', '.flac'].contains(ext)) {
-                          icon = Icons.audiotrack_rounded; color = AppColors.success;
-                        } else if (['.pdf'].contains(ext)) {
-                          icon = Icons.picture_as_pdf_rounded; color = AppColors.error;
-                        } else if (['.zip', '.tar', '.gz', '.rar'].contains(ext)) {
-                          icon = Icons.folder_zip_rounded; color = AppColors.textSecondary;
-                        } else {
-                          icon = Icons.insert_drive_file_rounded; color = AppColors.textSecondary;
-                        }
-
-                        return ListTile(
-                          leading: Container(
-                            width: 40, height: 40,
-                            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-                            child: Icon(icon, size: 20, color: color),
-                          ),
-                          title: Text(p.basename(entry.name), maxLines: 1, overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white)),
-                          subtitle: Text(p.dirname(entry.name).isEmpty ? '' : p.dirname(entry.name),
-                              maxLines: 1, overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary)),
-                          trailing: Text(formatFileSize(entry.size),
-                              style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary)),
-                          onTap: () async {
-                            try {
-                              final result = await OpenFilex.open(entry.path);
-                              if (result.type != ResultType.done && context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Could not open: ${result.message}')),
-                                );
-                              }
-                            } catch (e) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error: $e')),
-                                );
-                              }
-                            }
-                          },
-                        );
-                      },
-                    ),
-            ),
-          ]),
-        ),
-      ),
-    );
-  }
-}
-
-String formatFileSize(int bytes) {
-  if (bytes < 1024) return '$bytes B';
-  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-  if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-  return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
 }

@@ -132,7 +132,6 @@ class _BackupSetupPageState extends State<BackupSetupPage> {
             ),
           ),
           const SizedBox(height: 12),
-          // ─── Destination Folder ──────────────────────────────
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),

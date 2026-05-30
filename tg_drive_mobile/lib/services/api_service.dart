@@ -114,7 +114,6 @@ class ApiService {
     }
   }
 
-  // ─── Auth ─────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> sendPhone(String phone) =>
       _post('/auth/phone', {'phoneNumber': phone});
@@ -134,7 +133,6 @@ class ApiService {
 
   Future<void> logout() => _post('/auth/logout', {});
 
-  // ─── Folders ──────────────────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> getFolders() async {
     final data = await _get('/folders');
@@ -154,7 +152,6 @@ class ApiService {
   Future<void> deleteFolder(String id, String accessHash) =>
       _delete('/folders/$id', {'accessHash': accessHash});
 
-  // ─── Files ────────────────────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> listFiles(
       String chatId, String accessHash,
@@ -217,7 +214,6 @@ class ApiService {
     });
   }
 
-  // ─── Backup ───────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> backupUploadBatch(
     String folderName,
@@ -233,18 +229,15 @@ class ApiService {
   Future<Map<String, dynamic>> getBackupProgress(String batchId) =>
       _get('/upload/$batchId/progress');
 
-  // ─── Stats ───────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> getStats() => _get('/stats');
 
-  // ─── Recents ─────────────────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> getRecents() async {
     final data = await _get('/recents');
     return List<Map<String, dynamic>>.from(data['files'] ?? []);
   }
 
-  // ─── Trash ───────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> moveToTrash(
     List<int> messageIds,
@@ -268,7 +261,6 @@ class ApiService {
   Future<Map<String, dynamic>> purgeTrash() =>
       _post('/trash/purge', {});
 
-  // ─── Favorites ───────────────────────────────────────────────
 
   Future<void> addFavorite(
     int messageId,
