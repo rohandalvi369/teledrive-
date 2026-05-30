@@ -93,7 +93,7 @@ jobs:
         run: flutter pub get
 
       - name: Build debug APK
-        run: flutter build apk --debug
+        run: flutter build apk --debug --dart-define=API_ID=${{ secrets.API_ID }} --dart-define=API_HASH=${{ secrets.API_HASH }}
 
       - name: Rename APK
         run: |
