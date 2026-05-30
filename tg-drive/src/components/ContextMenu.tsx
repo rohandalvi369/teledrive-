@@ -56,7 +56,7 @@ export default function ContextMenu({ x, y, items, onClose }: Props) {
           onMouseEnter={!item.danger ? (e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-accent) 8%, transparent)' } : undefined}
           onMouseLeave={!item.danger ? (e) => { e.currentTarget.style.background = '' } : undefined}
           style={{
-            color: item.danger ? '#ef4444' : 'var(--color-text)',
+            color: item.danger ? 'var(--color-danger)' : 'var(--color-text)',
           }}
         >
           {item.icon && <span className="text-base w-5 text-center leading-none">{item.icon}</span>}

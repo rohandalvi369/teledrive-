@@ -754,6 +754,7 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search files..."
+              aria-label="Search files"
               className="w-full pl-9 pr-3 py-1.5 text-sm rounded-lg border transition-all duration-150 placeholder-[var(--color-text-tertiary)]"
               style={{
                 background: 'var(--color-input-bg)',
@@ -806,7 +807,7 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
             onClick={handleLogout}
             className="text-xs transition-colors p-1.5"
             style={{ color: 'var(--color-text-tertiary)' }}
-            onMouseEnter={(e) => e.currentTarget.style.color = '#ef4444'}
+            onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-danger)'}
             onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-text-tertiary)'}
             title="Sign out"
           >
@@ -843,10 +844,12 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
         activeFolderType={activeFolder.type}
       />
 
-      <div className="border-b px-4 flex items-center gap-4 flex-shrink-0" style={{ background: 'var(--color-surface-tertiary)', borderColor: 'var(--color-border)' }}>
+      <div className="border-b px-4 flex items-center gap-4 flex-shrink-0" role="tablist" style={{ background: 'var(--color-surface-tertiary)', borderColor: 'var(--color-border)' }}>
         {(['all', 'images', 'videos', 'audio', 'docs'] as FileCategory[]).map((cat) => (
           <button
             key={cat}
+            role="tab"
+            aria-selected={activeTab === cat}
             onClick={() => setActiveTab(cat)}
             className={`px-1 py-2.5 text-xs font-semibold border-b-2 transition-all duration-150 ${
               activeTab === cat ? '' : 'border-transparent hover:opacity-80'
@@ -905,9 +908,9 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
                       handlePurgeTrash()
                     }}
                     className="px-2 py-1 rounded text-[11px] font-medium transition-colors"
-                    style={{ color: '#ef4444', background: 'rgba(239,68,68,0.15)' }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239,68,68,0.25)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(239,68,68,0.15)'}
+                    style={{ color: 'var(--color-danger)', background: 'color-mix(in srgb, var(--color-danger) 15%, transparent)' }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'color-mix(in srgb, var(--color-danger) 25%, transparent)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'color-mix(in srgb, var(--color-danger) 15%, transparent)'}
                   >
                     Empty Trash
                   </button>
@@ -990,7 +993,7 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
             <div
               key={t.id}
               className="px-3 py-2 rounded-lg text-xs font-medium shadow-lg animate-in slide-in-from-bottom-2"
-              style={{ background: t.type === 'success' ? '#059669' : '#dc2626', color: 'white' }}
+              style={{ background: t.type === 'success' ? 'var(--color-success)' : 'var(--color-danger)', color: 'white' }}
             >
               {t.message}
             </div>

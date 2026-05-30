@@ -77,7 +77,7 @@ export default function MultiSelectBar({
             onClick={onMoveToTrash}
             disabled={selectedCount === 0 || activeFolderType === 'saved'}
             className="px-3 py-1 text-xs rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            style={{ background: 'rgba(239,68,68,0.2)', color: '#ef4444' }}
+            style={{ background: 'color-mix(in srgb, var(--color-danger) 20%, transparent)', color: 'var(--color-danger)' }}
           >
             Move to Trash
           </button>

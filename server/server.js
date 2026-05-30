@@ -110,7 +110,6 @@ async function ensureConnected(sessionStr) {
   return c;
 }
 
-// ─── Auth ───────────────────────────────────────────────────────
 
 app.post('/auth/phone', async (req, res) => {
   try {
@@ -176,7 +175,6 @@ app.post('/auth/password', async (req, res) => {
   }
 });
 
-// ─── Session / State ────────────────────────────────────────────
 
 app.get('/auth/state', async (req, res) => {
   try {
@@ -209,7 +207,6 @@ app.post('/auth/logout', async (req, res) => {
   }
 });
 
-// ─── Folders ────────────────────────────────────────────────────
 
 function channelToFolder(channel, accessHash) {
   return {
@@ -321,7 +318,6 @@ app.delete('/folders/:id', async (req, res) => {
   }
 });
 
-// ─── Files ──────────────────────────────────────────────────────
 
 function extractFileInfo(msg) {
   if (!msg.media || !(msg.media instanceof Api.MessageMediaDocument)) return null;
@@ -394,7 +390,6 @@ app.post('/files/list', async (req, res) => {
   }
 });
 
-// ─── Upload ─────────────────────────────────────────────────────
 
 app.post('/upload', upload.single('file'), async (req, res) => {
   try {
@@ -450,7 +445,6 @@ app.get('/upload/:batchId/progress', (req, res) => {
   res.json({ ok: true, ...data });
 });
 
-// ─── Download ───────────────────────────────────────────────────
 
 app.post('/files/download', async (req, res) => {
   try {
@@ -489,7 +483,6 @@ app.post('/files/download', async (req, res) => {
   }
 });
 
-// ─── Delete ─────────────────────────────────────────────────────
 
 app.post('/files/delete', async (req, res) => {
   try {
@@ -516,7 +509,6 @@ app.post('/files/delete', async (req, res) => {
   }
 });
 
-// ─── Move (Forward) ─────────────────────────────────────────────
 
 app.post('/files/move', async (req, res) => {
   try {
@@ -549,7 +541,6 @@ app.post('/files/move', async (req, res) => {
   }
 });
 
-// ─── Copy (Forward only) ─────────────────────────────────────────
 
 app.post('/files/copy', async (req, res) => {
   try {
@@ -582,7 +573,6 @@ app.post('/files/copy', async (req, res) => {
   }
 });
 
-// ─── Special Channel Helpers ────────────────────────────────────
 
 const SPECIAL_CHANNELS = {
   TRASH: { title: 'tg-drive-trash', about: TRASH_MARKER },
@@ -618,7 +608,6 @@ async function listAllFilesInChannel(c, peer, limit = 200) {
   return messages.map(extractFileInfo).filter(Boolean);
 }
 
-// ─── Stats ──────────────────────────────────────────────────────
 
 app.get('/stats', async (req, res) => {
   try {
@@ -661,7 +650,6 @@ app.get('/stats', async (req, res) => {
   }
 });
 
-// ─── Recents ────────────────────────────────────────────────────
 
 app.get('/recents', async (req, res) => {
   try {
@@ -698,7 +686,6 @@ app.get('/recents', async (req, res) => {
   }
 });
 
-// ─── Trash ──────────────────────────────────────────────────────
 
 app.post('/trash/move', async (req, res) => {
   try {
@@ -802,7 +789,6 @@ app.post('/trash/delete', async (req, res) => {
   }
 });
 
-// ─── Backup ─────────────────────────────────────────────────────
 
 async function findOrCreateBackupChannel(c, folderName) {
   const dialogs = await c.getDialogs({ limit: 200 });
@@ -897,7 +883,6 @@ app.post('/backup/upload-batch', async (req, res) => {
   }
 });
 
-// ─── Ping ───────────────────────────────────────────────────────
 
 app.post('/ping', async (req, res) => {
   try {
@@ -1046,13 +1031,11 @@ app.get('/stream', async (req, res) => {
   }
 });
 
-// ─── Health ─────────────────────────────────────────────────────
 
 app.get('/health', (req, res) => {
   res.json({ ok: true, status: client?.connected ? 'connected' : 'disconnected' });
 });
 
-// ─── Start ──────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
   console.log(`TeleDrive server running on http://localhost:${PORT}`);

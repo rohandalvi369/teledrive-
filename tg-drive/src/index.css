@@ -14,6 +14,10 @@
   --color-accent: #24A1DE;
   --color-accent-hover: #1e8fc7;
   --color-accent-light: #e8f4fc;
+  --color-success: #22c55e;
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+  --color-info: #3b82f6;
   --grid-bg: #F0EAD6;
   --color-header-bg: #ffffff;
   --color-sidebar-bg: #e8e0cc;
@@ -36,6 +40,10 @@
   --color-accent: #6c63ff;
   --color-accent-hover: #5a52e0;
   --color-accent-light: #1e1b4b;
+  --color-success: #22c55e;
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+  --color-info: #3b82f6;
   --grid-bg: #000000;
   --color-header-bg: #111111;
   --color-sidebar-bg: #111111;

@@ -44,7 +44,7 @@ export default function UploadProgress({ uploads }: Props) {
                     onClick={() => handleCancel(upload)}
                     className="text-[11px] transition-colors leading-none"
                     style={{ color: 'var(--color-text-tertiary)' }}
-                    onMouseEnter={(e) => e.currentTarget.style.color = '#ef4444'}
+                    onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-danger)'}
                     onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-text-tertiary)'}
                     title="Cancel upload"
                   >
@@ -65,10 +65,10 @@ export default function UploadProgress({ uploads }: Props) {
               </div>
             )}
             {upload.status === 'done' && (
-              <p className="text-[10px]" style={{ color: '#22c55e' }}>Uploaded {formatSize(upload.size)}</p>
+              <p className="text-[10px]" style={{ color: 'var(--color-success)' }}>Uploaded {formatSize(upload.size)}</p>
             )}
             {upload.status === 'error' && (
-              <p className="text-[10px]" style={{ color: '#ef4444' }}>{upload.error || 'Upload failed'}</p>
+              <p className="text-[10px]" style={{ color: 'var(--color-danger)' }}>{upload.error || 'Upload failed'}</p>
             )}
           </div>
         )

@@ -94,7 +94,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <div className="mb-6">
       <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--color-text)' }}>{title}</h2>
-      <div className="text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary, #a1a1aa)' }}>
+      <div className="text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
         {children}
       </div>
     </div>

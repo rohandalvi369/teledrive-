@@ -87,7 +87,7 @@ export default function SettingsModal({
 
           {/* === Cache === */}
           <Section label="Cache">
-            <div className="space-y-2 text-xs" style={{ color: 'var(--color-text-secondary, #a1a1aa)' }}>
+            <div className="space-y-2 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
               {cacheEntries.map((entry) => (
                 entry.size > 0 && (
                   <div key={entry.key} className="flex justify-between">
@@ -118,7 +118,7 @@ export default function SettingsModal({
                   }
                 }}
                 className="flex-1 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors"
-                style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444' }}
+                style={{ background: 'color-mix(in srgb, var(--color-danger) 15%, transparent)', color: 'var(--color-danger)' }}
                 onMouseEnter={(e) => e.currentTarget.style.filter = 'brightness(0.9)'}
                 onMouseLeave={(e) => e.currentTarget.style.filter = ''}
               >
@@ -181,7 +181,7 @@ export default function SettingsModal({
                 <div>
                   <label className="block text-xs mb-1" style={{ color: 'var(--color-text-tertiary)' }}>Folders to back up</label>
                   {backupFolders.length === 0 ? (
-                    <p className="text-xs mb-2" style={{ color: 'var(--color-text-secondary, #a1a1aa)' }}>
+                    <p className="text-xs mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                       No folders selected yet. Add folders to back up.
                     </p>
                   ) : (
@@ -198,7 +198,7 @@ export default function SettingsModal({
                             disabled={isRunning}
                             className="flex-shrink-0 p-0.5 rounded transition-colors disabled:opacity-30"
                             style={{ color: 'var(--color-text-tertiary)' }}
-                            onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-danger)' }}
                             onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-tertiary)' }}
                           >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -239,7 +239,7 @@ export default function SettingsModal({
                   <button
                     onClick={onCancelBackup}
                     className="w-full px-3 py-1.5 text-xs rounded-lg font-medium transition-colors"
-                    style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444' }}
+                    style={{ background: 'color-mix(in srgb, var(--color-danger) 15%, transparent)', color: 'var(--color-danger)' }}
                     onMouseEnter={(e) => e.currentTarget.style.filter = 'brightness(0.9)'}
                     onMouseLeave={(e) => e.currentTarget.style.filter = ''}
                   >
@@ -263,18 +263,18 @@ export default function SettingsModal({
                         {doneJobs}/{totalJobs}
                       </span>
                     </div>
-                    <div className="text-xs" style={{ color: 'var(--color-text-secondary, #a1a1aa)' }}>
+                    <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                       {backupPhase === 'scanning' ? 'Scanning folders...' : `Uploading...`}
                     </div>
                   </div>
                 )}
 
                 {backupStats && backupPhase === 'done' && (
-                  <div className="text-xs space-y-0.5" style={{ color: 'var(--color-text-secondary, #a1a1aa)' }}>
+                  <div className="text-xs space-y-0.5" style={{ color: 'var(--color-text-secondary)' }}>
                     <div className="flex gap-4">
                       <span>Uploaded: <strong style={{ color: 'var(--color-text)' }}>{backupStats.uploaded}</strong></span>
                       {backupStats.skipped > 0 && <span>Skipped: <strong style={{ color: 'var(--color-text)' }}>{backupStats.skipped}</strong></span>}
-                      {backupStats.failed > 0 && <span>Failed: <strong style={{ color: '#ef4444' }}>{backupStats.failed}</strong></span>}
+                      {backupStats.failed > 0 && <span>Failed: <strong style={{ color: 'var(--color-danger)' }}>{backupStats.failed}</strong></span>}
                     </div>
                   </div>
                 )}
@@ -286,12 +286,12 @@ export default function SettingsModal({
                         <span className="flex-shrink-0 w-3.5 text-center">
                           {job.status === 'queued' && <span style={{ color: 'var(--color-text-tertiary)' }}>·</span>}
                           {job.status === 'uploading' && <span className="animate-pulse" style={{ color: 'var(--color-accent)' }}>↻</span>}
-                          {job.status === 'done' && <span style={{ color: '#22c55e' }}>✓</span>}
+                          {job.status === 'done' && <span style={{ color: 'var(--color-success)' }}>✓</span>}
                           {job.status === 'skipped' && <span style={{ color: 'var(--color-text-tertiary)' }}>–</span>}
-                          {job.status === 'failed' && <span style={{ color: '#ef4444' }}>✗</span>}
+                          {job.status === 'failed' && <span style={{ color: 'var(--color-danger)' }}>✗</span>}
                         </span>
                         <span className="truncate flex-1" style={{ color: 'var(--color-text)' }}>{job.fileName}</span>
-                        {job.error && <span className="flex-shrink-0 truncate max-w-20" style={{ color: '#ef4444' }}>{job.error}</span>}
+                        {job.error && <span className="flex-shrink-0 truncate max-w-20" style={{ color: 'var(--color-danger)' }}>{job.error}</span>}
                       </div>
                     ))}
                   </div>

@@ -126,6 +126,7 @@ export default function Sidebar({ folders, activeId, onSelect, collapsed, onTogg
         {!collapsed && <span className="text-[10px] font-semibold uppercase tracking-[0.15em]" style={{ color: 'var(--color-text-tertiary)' }}>TG-DRIVE</span>}
         <button
           onClick={onToggle}
+          aria-expanded={!collapsed}
           className="transition-colors p-1"
           style={{ color: 'var(--color-text-tertiary)' }}
           onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text)')}
@@ -281,8 +282,8 @@ export default function Sidebar({ folders, activeId, onSelect, collapsed, onTogg
               }`}
               style={{
                 background: isActive ? 'color-mix(in srgb, var(--color-accent) 10%, transparent)' : dragOverTrash ? 'rgba(239,68,68,0.15)' : undefined,
-                color: isActive ? 'var(--color-accent)' : dragOverTrash ? '#f87171' : 'var(--color-text-tertiary)',
-                borderLeftColor: isActive || dragOverTrash ? '#ef4444' : 'transparent',
+                color: isActive ? 'var(--color-accent)' : dragOverTrash ? 'var(--color-danger)' : 'var(--color-text-tertiary)',
+                borderLeftColor: isActive || dragOverTrash ? 'var(--color-danger)' : 'transparent',
               }}
               onMouseEnter={!isActive && !dragOverTrash ? (e) => { e.currentTarget.style.color = 'var(--color-text)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--color-accent) 5%, transparent)' } : undefined}
               onMouseLeave={!isActive && !dragOverTrash ? (e) => { e.currentTarget.style.color = 'var(--color-text-tertiary)'; e.currentTarget.style.background = '' } : undefined}

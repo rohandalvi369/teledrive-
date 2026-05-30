@@ -15,10 +15,10 @@ export default function BackupBanner({ backupFolders, backupPhase, backupStats, 
       style={{ background: 'var(--color-surface-tertiary)', borderColor: 'var(--color-border)', color: 'var(--color-text-tertiary)' }}>
       <div className="w-1.5 h-1.5 rounded-full flex-shrink-0"
         style={{
-          background: backupPhase === 'scanning' ? '#3b82f6'
-            : backupPhase === 'uploading' ? '#22c55e'
-            : backupPhase === 'done' ? '#22c55e'
-            : '#6b7280',
+          background: backupPhase === 'scanning' ? 'var(--color-info)'
+            : backupPhase === 'uploading' ? 'var(--color-success)'
+            : backupPhase === 'done' ? 'var(--color-success)'
+            : 'var(--color-text-tertiary)',
         }}
       />
       <span className="truncate">

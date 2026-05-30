@@ -373,9 +373,9 @@ export default function FilePreview({ file, folder, files, onClose, onNavigate, 
             <button
               onClick={() => onRestore(file)}
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-              style={{ background: 'rgba(34,197,94,0.2)', color: '#22c55e' }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(34,197,94,0.35)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(34,197,94,0.2)'}
+              style={{ background: 'color-mix(in srgb, var(--color-success) 20%, transparent)', color: 'var(--color-success)' }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'color-mix(in srgb, var(--color-success) 35%, transparent)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'color-mix(in srgb, var(--color-success) 20%, transparent)'}
               title="Restore to Saved Messages"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -388,9 +388,9 @@ export default function FilePreview({ file, folder, files, onClose, onNavigate, 
             <button
               onClick={() => onDelete(file)}
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-              style={{ background: 'rgba(239,68,68,0.2)', color: '#ef4444' }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239,68,68,0.35)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(239,68,68,0.2)'}
+              style={{ background: 'color-mix(in srgb, var(--color-danger) 20%, transparent)', color: 'var(--color-danger)' }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'color-mix(in srgb, var(--color-danger) 35%, transparent)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'color-mix(in srgb, var(--color-danger) 20%, transparent)'}
               title="Delete permanently"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -403,9 +403,9 @@ export default function FilePreview({ file, folder, files, onClose, onNavigate, 
             <button
               onClick={() => onTrash(file)}
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-              style={{ background: 'rgba(239,68,68,0.2)', color: '#f87171' }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239,68,68,0.3)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(239,68,68,0.2)'}
+              style={{ background: 'color-mix(in srgb, var(--color-danger) 20%, transparent)', color: 'var(--color-danger)' }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'color-mix(in srgb, var(--color-danger) 30%, transparent)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'color-mix(in srgb, var(--color-danger) 20%, transparent)'}
               title="Move to trash"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -427,7 +427,7 @@ export default function FilePreview({ file, folder, files, onClose, onNavigate, 
             </svg>
             {progress !== null && progress < 100 ? `Downloading ${progress}%` : 'Download'}
           </button>
-          {progress === 100 && <span className="text-xs" style={{ color: '#22c55e' }}>Saved!</span>}
+          {progress === 100 && <span className="text-xs" style={{ color: 'var(--color-success)' }}>Saved!</span>}
           <div className="flex-1">{progressBar}</div>
         </div>
       </div>
