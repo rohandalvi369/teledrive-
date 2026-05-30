@@ -190,7 +190,15 @@ class TelegramService extends ChangeNotifier {
 
   void _sendRequest(String type, Map<String, dynamic> params) {
     final request = <String, dynamic>{'@type': type}..addAll(params);
-    _sendJson(request);
+    try {
+      _sendJson(request);
+    } catch (e) {
+      debugPrint('_sendRequest failed for $type: $e');
+      _loadingTimer?.cancel();
+      _loading = false;
+      _error = 'TDLib communication error: $e';
+      notifyListeners();
+    }
   }
 
   void _sendJson(Map<String, dynamic> request) {
@@ -271,7 +279,9 @@ class TelegramService extends ChangeNotifier {
     if (type == 'updateAuthorizationState') {
       final authStateRaw = json['authorization_state'] as Map<String, dynamic>?;
       if (authStateRaw != null) {
-        switch (authStateRaw['@type'] as String?) {
+        final rawType = authStateRaw['@type'] as String?;
+        debugPrint('Auth state update: $rawType, current step: $_currentStep');
+        switch (rawType) {
           case 'authorizationStateWaitEncryptionKey':
             _sendJson({
               '@type': 'checkDatabaseEncryptionKey',
