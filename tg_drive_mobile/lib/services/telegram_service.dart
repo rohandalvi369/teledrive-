@@ -139,7 +139,7 @@ class TelegramService extends ChangeNotifier {
 
   void _resetLoadingAfterTimeout() {
     _loadingTimer?.cancel();
-    _loadingTimer = Timer(const Duration(seconds: 15), () {
+    _loadingTimer = Timer(const Duration(seconds: 30), () {
       if (_loading) {
         _loading = false;
         _error = 'Connection timeout. Check your internet and try again.';
@@ -155,6 +155,7 @@ class TelegramService extends ChangeNotifier {
     notifyListeners();
     final normalized = phone.startsWith('+') ? phone : '+$phone';
     debugPrint('Sending code to: $normalized');
+    debugPrint('Current authState: $_authState, step: $_currentStep');
     _sendRequest('setAuthenticationPhoneNumber', {
       'phone_number': normalized,
       'settings': {
@@ -373,6 +374,11 @@ class TelegramService extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('TDLib process error for $type: $e');
+      if (type == 'updateAuthorizationState') {
+        _loadingTimer?.cancel();
+        _loading = false;
+        notifyListeners();
+      }
     }
   }
 

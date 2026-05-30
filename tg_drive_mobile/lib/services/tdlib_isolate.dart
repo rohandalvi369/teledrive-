@@ -52,7 +52,7 @@ class TdlibIsolate {
       {'send_port': _respPort.sendPort, 'params': params},
     );
 
-    await ready.future.timeout(const Duration(seconds: 15));
+    await ready.future.timeout(const Duration(seconds: 30));
   }
 
   void sendRaw(Map<String, dynamic> request) {
