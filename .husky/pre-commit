@@ -1,0 +1,14 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+# Check for debug/dead code in staged .dart and .ts/.tsx files
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(dart|ts|tsx|js)$' || true)
+
+if [ -n "$STAGED_FILES" ]; then
+  # Fail if console.log, debugPrint, or hardcoded API IDs are found in staged files
+  echo "$STAGED_FILES" | xargs grep -l 'console\.log\|debugPrint\|33624340\|e91bb3030342033d159f40937522b046' 2>/dev/null && {
+    echo "ERROR: Staged files contain debug statements or hardcoded API credentials."
+    echo "Remove them before committing."
+    exit 1
+  }
+fi
