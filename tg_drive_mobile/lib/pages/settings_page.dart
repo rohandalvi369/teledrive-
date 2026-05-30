@@ -26,10 +26,14 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _loadSavedUrl() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedUrl = prefs.getString('backup_api_url');
-    if (savedUrl != null && savedUrl.isNotEmpty && mounted) {
-      _serverUrlCtrl.text = savedUrl;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedUrl = prefs.getString('backup_api_url');
+      if (savedUrl != null && savedUrl.isNotEmpty && mounted) {
+        _serverUrlCtrl.text = savedUrl;
+      }
+    } catch (e) {
+      debugPrint('Failed to load saved URL: $e');
     }
   }
 
@@ -40,64 +44,76 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _saveServerUrl() async {
-    final url = _serverUrlCtrl.text.trim();
-    if (url.isEmpty) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('backup_api_url', url);
-    if (mounted) {
-      context.read<ApiService>().updateBaseUrl(url);
-      context.read<BackupService>().saveServerConfig(apiUrl: url);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Server URL saved')),
-      );
+    try {
+      final url = _serverUrlCtrl.text.trim();
+      if (url.isEmpty) return;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('backup_api_url', url);
+      if (mounted) {
+        context.read<ApiService>().updateBaseUrl(url);
+        context.read<BackupService>().saveServerConfig(apiUrl: url);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Server URL saved')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Failed to save server URL: $e');
     }
   }
 
   Future<void> _clearCache() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Clear Cache'),
-        content: const Text('This will clear all locally cached data. You will stay logged in.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Clear')),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    final prefs = await SharedPreferences.getInstance();
-    final keys = prefs.getKeys().where((k) => k.startsWith('backup_')).toList();
-    for (final k in keys) await prefs.remove(k);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cache cleared')),
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Clear Cache'),
+          content: const Text('This will clear all locally cached data. You will stay logged in.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Clear')),
+          ],
+        ),
       );
+      if (confirmed != true) return;
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys().where((k) => k.startsWith('backup_')).toList();
+      for (final k in keys) await prefs.remove(k);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cache cleared')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Failed to clear cache: $e');
     }
   }
 
   Future<void> _clearAllData() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Clear All Data'),
-        content: const Text('This will clear all local data and sign you out. Continue?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Clear All', style: TextStyle(color: Theme.of(context).colorScheme.onError)),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    final prefs = await SharedPreferences.getInstance();
-    final keys = prefs.getKeys().where((k) => k.startsWith('backup_')).toList();
-    for (final k in keys) await prefs.remove(k);
-    if (mounted) {
-      context.read<TelegramService>().logout();
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Clear All Data'),
+          content: const Text('This will clear all local data and sign you out. Continue?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text('Clear All', style: TextStyle(color: Theme.of(context).colorScheme.onError)),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys().where((k) => k.startsWith('backup_')).toList();
+      for (final k in keys) await prefs.remove(k);
+      if (mounted) {
+        context.read<TelegramService>().logout();
+      }
+    } catch (e) {
+      debugPrint('Failed to clear all data: $e');
     }
   }
 

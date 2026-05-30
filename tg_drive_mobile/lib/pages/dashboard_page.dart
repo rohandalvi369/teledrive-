@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui';
-import 'package:flutter/foundation.dart';
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -681,7 +680,7 @@ class _DashboardPageState extends State<DashboardPage>
                   ]),
                 ),
 
-                // ── Storage Ring ──
+
                 if (_stats != null) ...[
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -690,7 +689,7 @@ class _DashboardPageState extends State<DashboardPage>
                   const Divider(indent: 20, endIndent: 20),
                 ],
 
-                // ── Home Section ──
+
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
                   child: Text('HOME', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 1.2)),
@@ -727,7 +726,7 @@ class _DashboardPageState extends State<DashboardPage>
 
                 const Divider(indent: 20, endIndent: 20),
 
-                // ── Quick Links ──
+
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
                   child: Text('QUICK LINKS', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 1.2)),
@@ -739,7 +738,7 @@ class _DashboardPageState extends State<DashboardPage>
 
                 const Divider(indent: 20, endIndent: 20),
 
-                // ── Settings ──
+
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
                   child: Text('MORE', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 1.2)),

@@ -61,14 +61,14 @@ class _AuthFlowState extends State<AuthFlow> {
             Container(
               width: 100, height: 100,
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(color: AppColors.primaryGlow, blurRadius: 40, spreadRadius: 5),
                 ],
               ),
               child: const Icon(Icons.cloud, size: 48, color: AppColors.primary),
-            ).animate().shake(duration: 2000.ms).then().shimmer(duration: 2000.ms, color: AppColors.primary.withOpacity(0.1)),
+            ).animate().shake(duration: 2000.ms).then().shimmer(duration: 2000.ms, color: AppColors.primary.withValues(alpha: 0.1)),
             const SizedBox(height: 24),
             Text('TeleDrive',
                 style: GoogleFonts.inter(fontSize: 32, fontWeight: FontWeight.w600, color: Colors.white)),
@@ -87,9 +87,9 @@ class _AuthFlowState extends State<AuthFlow> {
                 padding: const EdgeInsets.all(12),
                 margin: const EdgeInsets.symmetric(horizontal: 32),
                 decoration: BoxDecoration(
-                  color: AppColors.error.withOpacity(0.15),
+                  color: AppColors.error.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                  border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
                 ),
                 child: Text(
                   telegram.error!,
@@ -114,7 +114,7 @@ class _AuthFlowState extends State<AuthFlow> {
             Container(
               width: 100, height: 100,
               decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.1),
+                color: AppColors.error.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.cloud_off, size: 48, color: AppColors.error),

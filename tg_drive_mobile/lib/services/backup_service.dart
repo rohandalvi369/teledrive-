@@ -235,10 +235,14 @@ class BackupService extends ChangeNotifier {
     required String apiUrl,
     String? session,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('backup_api_url', apiUrl);
-    if (session != null) {
-      await prefs.setString('backup_server_session', session);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('backup_api_url', apiUrl);
+      if (session != null) {
+        await prefs.setString('backup_server_session', session);
+      }
+    } catch (e) {
+      debugPrint('Failed to save server config: $e');
     }
   }
 

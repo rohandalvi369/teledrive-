@@ -46,7 +46,7 @@ class _PhonePageState extends State<PhonePage> {
                 Container(
                   width: 80, height: 80,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.15),
+                    color: AppColors.primary.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.phone_android, size: 36, color: AppColors.primary),
@@ -67,9 +67,9 @@ class _PhonePageState extends State<PhonePage> {
                     padding: const EdgeInsets.all(12),
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      color: AppColors.error.withOpacity(0.15),
+                      color: AppColors.error.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                      border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
                     ),
                     child: Text(telegram.error!,
                         style: GoogleFonts.inter(fontSize: 13, color: AppColors.error)),
@@ -79,7 +79,7 @@ class _PhonePageState extends State<PhonePage> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: _phoneController.text.isNotEmpty
-                        ? [BoxShadow(color: AppColors.primary.withOpacity(0.15), blurRadius: 20, spreadRadius: 2)]
+                        ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.15), blurRadius: 20, spreadRadius: 2)]
                         : null,
                   ),
                   child: TextField(

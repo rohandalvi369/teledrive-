@@ -17,6 +17,14 @@ class AppColors {
 
   static const Color gradientStart = Color(0xFF2AABEE);
   static const Color gradientEnd = Color(0xFF7B61FF);
+
+  // File type colors
+  static const Color fileImage = Color(0xFF3B82F6);
+  static const Color fileVideo = Color(0xFF8B5CF6);
+  static const Color fileAudio = Color(0xFF22C55E);
+  static const Color fileDoc = Color(0xFFF97316);
+  static const Color filePdf = Color(0xFFEF4444);
+  static const Color fileArchive = Color(0xFFA16207);
 }
 
 class AppTheme {
@@ -49,7 +57,7 @@ class AppTheme {
         labelSmall: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w400, color: AppColors.textSecondary),
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.surface.withOpacity(0.8),
+        backgroundColor: AppColors.surface.withValues(alpha: 0.8),
         elevation: 0,
         centerTitle: false,
         titleTextStyle: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textPrimary),

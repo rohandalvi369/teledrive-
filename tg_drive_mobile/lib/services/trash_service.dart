@@ -42,19 +42,32 @@ class TrashService extends ChangeNotifier {
     String sourceChatId,
     String sourceAccessHash,
   ) async {
-    final ids = files.map((f) => f.messageId).toList();
-    await _api.moveToTrash(ids, sourceChatId, sourceAccessHash);
-    await fetchTrash();
+    try {
+      final ids = files.map((f) => f.messageId).toList();
+      await _api.moveToTrash(ids, sourceChatId, sourceAccessHash);
+      await fetchTrash();
+    } catch (e) {
+      debugPrint('Failed to move to trash: $e');
+    }
   }
 
   Future<void> restore(List<int> messageIds) async {
-    await _api.restoreFromTrash(messageIds);
-    await fetchTrash();
+    try {
+      await _api.restoreFromTrash(messageIds);
+      await fetchTrash();
+    } catch (e) {
+      debugPrint('Failed to restore: $e');
+    }
   }
 
   Future<int> purge() async {
-    final result = await _api.purgeTrash();
-    await fetchTrash();
-    return (result['purged'] as num?)?.toInt() ?? 0;
+    try {
+      final result = await _api.purgeTrash();
+      await fetchTrash();
+      return (result['purged'] as num?)?.toInt() ?? 0;
+    } catch (e) {
+      debugPrint('Failed to purge trash: $e');
+      return 0;
+    }
   }
 }

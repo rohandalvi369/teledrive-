@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../models/drive_file.dart';
+import '../theme/app_theme.dart';
 
 class FileCard extends StatelessWidget {
   final DriveFile file;
@@ -9,15 +10,15 @@ class FileCard extends StatelessWidget {
   const FileCard({super.key, required this.file, required this.onTap});
 
   (IconData, Color) _getIconAndColor() {
-    if (file.mimeType.startsWith('image/')) return (Icons.image, Colors.blue);
-    if (file.mimeType.startsWith('video/')) return (Icons.videocam, Colors.purple);
-    if (file.mimeType.startsWith('audio/')) return (Icons.music_note, Colors.green);
-    if (file.mimeType.startsWith('text/')) return (Icons.description, Colors.orange);
-    if (file.mimeType.contains('pdf')) return (Icons.picture_as_pdf, Colors.red);
+    if (file.mimeType.startsWith('image/')) return (Icons.image, AppColors.fileImage);
+    if (file.mimeType.startsWith('video/')) return (Icons.videocam, AppColors.fileVideo);
+    if (file.mimeType.startsWith('audio/')) return (Icons.music_note, AppColors.fileAudio);
+    if (file.mimeType.startsWith('text/')) return (Icons.description, AppColors.fileDoc);
+    if (file.mimeType.contains('pdf')) return (Icons.picture_as_pdf, AppColors.filePdf);
     if (file.mimeType.contains('zip') || file.mimeType.contains('rar') || file.mimeType.contains('tar')) {
-      return (Icons.folder_zip, Colors.brown);
+      return (Icons.folder_zip, AppColors.fileArchive);
     }
-    return (Icons.insert_drive_file, Colors.grey);
+    return (Icons.insert_drive_file, AppColors.textSecondary);
   }
 
   String _formatSize(int bytes) {
@@ -52,7 +53,7 @@ class FileCard extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: showThumbnail ? null : color.withOpacity(0.15),
+                  color: showThumbnail ? null : color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: showThumbnail

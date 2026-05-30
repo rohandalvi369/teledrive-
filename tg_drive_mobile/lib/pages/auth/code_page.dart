@@ -73,7 +73,7 @@ class _CodePageState extends State<CodePage> {
                 Container(
                   width: 80, height: 80,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.15),
+                    color: AppColors.primary.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.message_outlined, size: 36, color: AppColors.primary),
@@ -94,9 +94,9 @@ class _CodePageState extends State<CodePage> {
                     padding: const EdgeInsets.all(12),
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      color: AppColors.error.withOpacity(0.15),
+                      color: AppColors.error.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                      border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
                     ),
                     child: Text(telegram.error!,
                         style: GoogleFonts.inter(fontSize: 13, color: AppColors.error)),
@@ -115,16 +115,16 @@ class _CodePageState extends State<CodePage> {
                         width: 44, height: 48,
                         decoration: BoxDecoration(
                           color: isFocused
-                              ? AppColors.primary.withOpacity(0.15)
+                              ? AppColors.primary.withValues(alpha: 0.15)
                               : isFilled
-                                  ? AppColors.primary.withOpacity(0.1)
+                                  ? AppColors.primary.withValues(alpha: 0.1)
                                   : AppColors.surfaceElevated,
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: isFocused
                                 ? AppColors.primary
                                 : isFilled
-                                    ? AppColors.primary.withOpacity(0.5)
+                                    ? AppColors.primary.withValues(alpha: 0.5)
                                     : AppColors.border,
                             width: isFocused ? 2 : 1,
                           ),

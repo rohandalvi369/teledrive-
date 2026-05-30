@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../services/trash_service.dart';
 import '../services/file_service.dart';
 import '../widgets/shimmer_list.dart';
+import '../theme/app_theme.dart';
 
 class TrashPage extends StatelessWidget {
   const TrashPage({super.key});
@@ -145,9 +146,9 @@ class TrashPage extends StatelessWidget {
   }
 
   Color _getColor(String mime) {
-    if (mime.startsWith('image/')) return Colors.green;
-    if (mime.startsWith('video/')) return Colors.blue;
-    if (mime.startsWith('audio/')) return Colors.orange;
-    return Colors.grey;
+    if (mime.startsWith('image/')) return AppColors.success;
+    if (mime.startsWith('video/')) return AppColors.fileImage;
+    if (mime.startsWith('audio/')) return AppColors.fileDoc;
+    return AppColors.textSecondary;
   }
 }

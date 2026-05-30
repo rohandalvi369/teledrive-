@@ -47,7 +47,7 @@ class _PasswordPageState extends State<PasswordPage> {
                 Container(
                   width: 80, height: 80,
                   decoration: BoxDecoration(
-                    color: AppColors.accent.withOpacity(0.15),
+                    color: AppColors.accent.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.lock_outline, size: 36, color: AppColors.accent),
@@ -66,9 +66,9 @@ class _PasswordPageState extends State<PasswordPage> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
-                      color: AppColors.accent.withOpacity(0.1),
+                      color: AppColors.accent.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.accent.withOpacity(0.2)),
+                      border: Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -92,9 +92,9 @@ class _PasswordPageState extends State<PasswordPage> {
                     padding: const EdgeInsets.all(12),
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      color: AppColors.error.withOpacity(0.15),
+                      color: AppColors.error.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                      border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
                     ),
                     child: Text(telegram.error!,
                         style: GoogleFonts.inter(fontSize: 13, color: AppColors.error)),

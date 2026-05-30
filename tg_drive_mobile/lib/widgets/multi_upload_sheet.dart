@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
 import '../services/file_service.dart';
+import '../models/drive_folder.dart';
 import '../theme/app_theme.dart';
 
 class MultiUploadSheet extends StatefulWidget {
