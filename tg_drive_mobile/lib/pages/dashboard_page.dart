@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -454,10 +455,10 @@ class _DashboardPageState extends State<DashboardPage>
 
   PreferredSizeWidget _buildGlassAppBar(FileService fs) {
     return AppBar(
-      backgroundColor: AppColors.surface.withOpacity(0.8),
+      backgroundColor: AppColors.surface.withValues(alpha: 0.8),
       flexibleSpace: ClipRect(
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
           child: Container(color: Colors.transparent),
         ),
       ),
@@ -532,10 +533,10 @@ class _DashboardPageState extends State<DashboardPage>
 
   PreferredSizeWidget _buildMultiSelectAppBar(FileService fs, ThemeData theme) {
     return AppBar(
-      backgroundColor: AppColors.surface.withOpacity(0.8),
+      backgroundColor: AppColors.surface.withValues(alpha: 0.8),
       flexibleSpace: ClipRect(
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
           child: Container(color: Colors.transparent),
         ),
       ),
@@ -589,35 +590,51 @@ class _DashboardPageState extends State<DashboardPage>
       );
     }
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOutCubic,
+    return SizedBox(
+      width: 56,
       height: 56,
-      width: _isScrolledDown ? 56 : null,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(colors: [AppColors.gradientStart, AppColors.gradientEnd]),
-        boxShadow: [BoxShadow(color: AppColors.primaryGlow, blurRadius: 24, spreadRadius: 2)],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(28),
-          onTap: fs.activeFolder != null ? () => _pickAndUpload(fs) : null,
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: _isScrolledDown ? 14 : 24),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.cloud_upload_rounded, color: Colors.white, size: 22),
-                if (!_isScrolledDown) ...[
-                  const SizedBox(width: 8),
-                  Text('Upload', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
-                ],
-              ],
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (!_isScrolledDown)
+            Positioned(
+              right: 56,
+              child: AnimatedOpacity(
+                opacity: _isScrolledDown ? 0 : 1,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                child: Container(
+                  height: 56,
+                  padding: const EdgeInsets.only(left: 24, right: 20),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(28),
+                    gradient: const LinearGradient(colors: [AppColors.gradientStart, AppColors.gradientEnd]),
+                    boxShadow: [BoxShadow(color: AppColors.primaryGlow, blurRadius: 24, spreadRadius: 2)],
+                  ),
+                  alignment: Alignment.center,
+                  child: Text('Upload', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+                ),
+              ),
+            ),
+          Container(
+            width: 56, height: 56,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              gradient: const LinearGradient(colors: [AppColors.gradientStart, AppColors.gradientEnd]),
+              boxShadow: [BoxShadow(color: AppColors.primaryGlow, blurRadius: 24, spreadRadius: 2)],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(28),
+                onTap: fs.activeFolder != null ? () => _pickAndUpload(fs) : null,
+                child: const Center(
+                  child: Icon(Icons.cloud_upload_rounded, color: Colors.white, size: 22),
+                ),
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -630,7 +647,7 @@ class _DashboardPageState extends State<DashboardPage>
     return Drawer(
       width: MediaQuery.of(context).size.width * 0.8,
       child: Container(
-        color: AppColors.bg.withOpacity(0.96),
+        color: AppColors.bg.withValues(alpha: 0.96),
         child: ClipRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
@@ -643,8 +660,8 @@ class _DashboardPageState extends State<DashboardPage>
                     gradient: LinearGradient(
                       begin: Alignment.topLeft, end: Alignment.bottomRight,
                       colors: [
-                        AppColors.primary.withOpacity(0.1),
-                        AppColors.accent.withOpacity(0.05),
+                        AppColors.primary.withValues(alpha: 0.1),
+                        AppColors.accent.withValues(alpha: 0.05),
                       ],
                     ),
                   ),
@@ -687,7 +704,7 @@ class _DashboardPageState extends State<DashboardPage>
                   return Container(
                     margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
                     decoration: BoxDecoration(
-                      color: isActive ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
+                      color: isActive ? AppColors.primary.withValues(alpha: 0.1) : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
                       border: Border(
                         left: BorderSide(color: isActive ? AppColors.primary : Colors.transparent, width: 3),
@@ -758,7 +775,6 @@ class _DashboardPageState extends State<DashboardPage>
     final cats = _stats!['categories'] as Map<String, dynamic>? ?? {};
 
     final items = ['images', 'videos', 'audio', 'documents'];
-    final colors = [AppColors.primary, AppColors.accent, AppColors.success, AppColors.textSecondary];
     final counts = items.map((k) => (cats[k] as num?)?.toInt() ?? 0).toList();
     final total = counts.fold<int>(0, (s, c) => s + c);
 
@@ -871,7 +887,7 @@ class _DashboardPageState extends State<DashboardPage>
       return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
           width: 80, height: 80,
-          decoration: BoxDecoration(color: AppColors.error.withOpacity(0.1), shape: BoxShape.circle),
+          decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.1), shape: BoxShape.circle),
           child: const Icon(Icons.error_outline_rounded, size: 36, color: AppColors.error),
         ),
         const SizedBox(height: 16),
@@ -894,7 +910,7 @@ class _DashboardPageState extends State<DashboardPage>
         if (!api.serverReachable)
           Container(
             width: double.infinity,
-            color: AppColors.error.withOpacity(0.9),
+            color: AppColors.error.withValues(alpha: 0.9),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: Row(children: [
               const Icon(Icons.cloud_off_rounded, size: 16, color: Colors.white),
@@ -953,9 +969,9 @@ class _DashboardPageState extends State<DashboardPage>
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
                   ),
                   child: GestureDetector(
                     onTap: () => setState(() => _sortMode = _SortMode.defaultOrder),
@@ -1170,7 +1186,7 @@ class _DashboardPageState extends State<DashboardPage>
             Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
               Container(
                 width: 80, height: 80,
-                decoration: BoxDecoration(color: AppColors.accent.withOpacity(0.1), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: AppColors.accent.withValues(alpha: 0.1), shape: BoxShape.circle),
                 child: const Icon(Icons.star_outline_rounded, size: 40, color: AppColors.accent),
               ),
               const SizedBox(height: 16),
@@ -1225,7 +1241,7 @@ class _DashboardPageState extends State<DashboardPage>
             Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
               Container(
                 width: 80, height: 80,
-                decoration: BoxDecoration(color: AppColors.textSecondary.withOpacity(0.1), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: AppColors.textSecondary.withValues(alpha: 0.1), shape: BoxShape.circle),
                 child: const Icon(Icons.history_rounded, size: 40, color: AppColors.textSecondary),
               ),
               const SizedBox(height: 16),
@@ -1300,7 +1316,7 @@ class _DashboardPageState extends State<DashboardPage>
             child: Stack(fit: StackFit.expand, children: [
               Hero(tag: 'image_${file.docId}', child: child),
               if (selected)
-                Container(color: AppColors.primary.withOpacity(0.3),
+                Container(color: AppColors.primary.withValues(alpha: 0.3),
                   child: const Center(child: Icon(Icons.check_circle, color: Colors.white, size: 24))),
             ]),
           ),
@@ -1339,7 +1355,7 @@ class _DashboardPageState extends State<DashboardPage>
           decoration: selected
               ? BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.primary.withOpacity(0.5), width: 1.5),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.5), width: 1.5),
                 )
               : null,
           child: Padding(
@@ -1436,7 +1452,7 @@ class _DashboardPageState extends State<DashboardPage>
     return Container(
       width: 44, height: 44,
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Icon(icon, size: 22, color: color),
@@ -1460,7 +1476,7 @@ class _DashboardPageState extends State<DashboardPage>
     return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
       Container(
         width: 100, height: 100,
-        decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.05), shape: BoxShape.circle),
+        decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.05), shape: BoxShape.circle),
         child: CustomPaint(
           size: const Size(100, 100),
           painter: _CloudPainter(),
@@ -1506,7 +1522,7 @@ class _CloudPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.primary.withOpacity(0.2)
+      ..color = AppColors.primary.withValues(alpha: 0.2)
       ..style = PaintingStyle.fill;
 
     final path = Path();
@@ -1527,6 +1543,67 @@ class _CloudPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
+// ─── Grid Thumbnail ───────────────────────────────────────────
+
+class _GridThumbnail extends StatefulWidget {
+  final String base64;
+  const _GridThumbnail({required this.base64});
+
+  @override
+  State<_GridThumbnail> createState() => _GridThumbnailState();
+}
+
+class _GridThumbnailState extends State<_GridThumbnail> {
+  Uint8List? _bytes;
+  bool _errored = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(_GridThumbnail old) {
+    super.didUpdateWidget(old);
+    if (widget.base64 != old.base64) {
+      _bytes = null;
+      _errored = false;
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    try {
+      final bytes = await compute(base64Decode, widget.base64);
+      if (mounted) setState(() => _bytes = bytes);
+    } catch (_) {
+      if (mounted) setState(() => _errored = true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_bytes == null || _errored) {
+      return Container(
+        color: AppColors.surfaceElevated,
+        child: const Center(child: Icon(Icons.image_rounded, size: 28, color: AppColors.textSecondary)),
+      );
+    }
+    return Image.memory(
+      _bytes!,
+      fit: BoxFit.cover,
+      cacheWidth: 200,
+      cacheHeight: 200,
+      filterQuality: FilterQuality.low,
+      errorBuilder: (_, __, ___) => Container(
+        color: AppColors.surfaceElevated,
+        child: const Center(child: Icon(Icons.image_rounded, size: 28, color: AppColors.textSecondary)),
+      ),
+    );
+  }
+}
+
 // ─── Section Header ─────────────────────────────────────────────
 
 class _SectionHeader extends StatelessWidget {
@@ -1542,7 +1619,7 @@ class _SectionHeader extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
+            color: AppColors.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Text('$count', style: GoogleFonts.inter(fontSize: 11, color: AppColors.primary)),
@@ -1616,7 +1693,6 @@ class _MultiUploadSheetState extends State<_MultiUploadSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final total = widget.files.length;
     final pct = total > 0 ? (_completed + _failed) / total : 0.0;
     return Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1801,7 +1877,6 @@ class _ZipContentSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return DraggableScrollableSheet(
       initialChildSize: 0.7,
       minChildSize: 0.4,
@@ -1818,7 +1893,7 @@ class _ZipContentSheet extends StatelessWidget {
             Container(
               width: 32, height: 4,
               margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(color: AppColors.textSecondary.withOpacity(0.4), borderRadius: BorderRadius.circular(2)),
+              decoration: BoxDecoration(color: AppColors.textSecondary.withValues(alpha: 0.4), borderRadius: BorderRadius.circular(2)),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1863,7 +1938,7 @@ class _ZipContentSheet extends StatelessWidget {
                         return ListTile(
                           leading: Container(
                             width: 40, height: 40,
-                            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
                             child: Icon(icon, size: 20, color: color),
                           ),
                           title: Text(p.basename(entry.name), maxLines: 1, overflow: TextOverflow.ellipsis,

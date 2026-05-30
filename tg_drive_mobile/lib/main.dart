@@ -89,7 +89,6 @@ class TeleDriveApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeService = context.watch<ThemeService>();
     final telegram = context.watch<TelegramService>();
 
     return MaterialApp(

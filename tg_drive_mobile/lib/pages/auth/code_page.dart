@@ -50,12 +50,6 @@ class _CodePageState extends State<CodePage> {
     }
   }
 
-  void _onDigitBack(int index) {
-    if (index > 0 && _controllers[index].text.isEmpty) {
-      _focusNodes[index - 1].requestFocus();
-    }
-  }
-
   void _trySubmit() {
     final code = _controllers.map((c) => c.text).join();
     if (code.length == 5 && !context.read<TelegramService>().loading) {
