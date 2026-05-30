@@ -440,12 +440,18 @@ class _DashboardPageState extends State<DashboardPage>
     final theme = Theme.of(context);
 
     return Scaffold(
+      extendBody: true,
       extendBodyBehindAppBar: true,
       appBar: _multiSelectMode
           ? _buildMultiSelectAppBar(fs, theme)
           : _buildGlassAppBar(fs),
       drawer: _buildDrawer(context, fs, theme),
-      body: SafeArea(child: _buildBody(context, fs, theme)),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 80),
+          child: _buildBody(context, fs, theme),
+        ),
+      ),
       floatingActionButton: _buildFAB(fs),
     );
   }

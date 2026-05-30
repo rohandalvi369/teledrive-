@@ -187,8 +187,9 @@ class _BackupSetupPageState extends State<BackupSetupPage> {
           const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(
-                child: FilledButton(
+              Flexible(
+                flex: 1,
+                child: FilledButton.icon(
                   onPressed:
                       bs.config.selectedFolderIds.isEmpty || bs.backingUp
                           ? null
@@ -200,16 +201,14 @@ class _BackupSetupPageState extends State<BackupSetupPage> {
                                 ),
                               );
                             },
-                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.backup, size: 18),
-                    SizedBox(width: 8),
-                    Text('Backup Now'),
-                  ]),
+                  icon: const Icon(Icons.backup, size: 18),
+                  label: const Text('Backup Now'),
                 ),
               ),
               const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.tonal(
+              Flexible(
+                flex: 1,
+                child: FilledButton.tonalIcon(
                   onPressed: bs.config.selectedFolderIds.isEmpty
                       ? null
                       : () {
@@ -220,11 +219,8 @@ class _BackupSetupPageState extends State<BackupSetupPage> {
                             ),
                           );
                         },
-                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.info_outline, size: 18),
-                    SizedBox(width: 8),
-                    Text('Status'),
-                  ]),
+                  icon: const Icon(Icons.info_outline, size: 18),
+                  label: const Text('Status'),
                 ),
               ),
             ],
