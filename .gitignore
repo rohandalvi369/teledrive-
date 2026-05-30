@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Rust/Tauri
+tg-drive/src-tauri/target/
+
+# Flutter
+tg_drive_mobile/.dart_tool/
+tg_drive_mobile/.packages
+tg_drive_mobile/.flutter-plugins
+tg_drive_mobile/.flutter-plugins-dependencies
+tg_drive_mobile/*.iml
+tg_drive_mobile/ios/Pods/
+tg_drive_mobile/ios/.symlinks/
+tg_drive_mobile/android/.gradle/
+tg_drive_mobile/android/local.properties
+tg_drive_mobile/android/key.properties
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+
+# Logs
+*.log
