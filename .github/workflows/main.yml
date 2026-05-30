@@ -82,15 +82,18 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.32.0'
+          flutter-version: '3.29'
           channel: 'stable'
           cache: true
 
-      - name: Flutter version check
-        run: flutter --version
+      - name: Flutter doctor
+        run: flutter doctor -v
 
       - name: Get Flutter dependencies
         run: flutter pub get
+
+      - name: Analyze Dart code
+        run: flutter analyze
 
       - name: Build debug APK
         run: flutter build apk --debug --dart-define=API_ID=${{ secrets.API_ID }} --dart-define=API_HASH=${{ secrets.API_HASH }}
@@ -106,3 +109,13 @@ jobs:
           name: tele_drive-apk
           path: tg_drive_mobile/build/app/outputs/flutter-apk/tele_drive.apk
           if-no-files-found: error
+
+      - name: Build release APK (unsigned)
+        run: flutter build apk --release --dart-define=API_ID=${{ secrets.API_ID }} --dart-define=API_HASH=${{ secrets.API_HASH }}
+
+      - name: Upload unsigned release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tele_drive-release-apk
+          path: tg_drive_mobile/build/app/outputs/flutter-apk/app-release-unsigned.apk
+          if-no-files-found: warn

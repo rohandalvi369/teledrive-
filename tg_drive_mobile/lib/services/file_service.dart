@@ -350,6 +350,22 @@ class FileService extends ChangeNotifier {
     }
   }
 
+  Future<void> deleteMessages(List<DriveFile> files, {int? chatId}) async {
+    final cid = chatId ?? _activeFolder?.chatId;
+    if (cid == null) return;
+    try {
+      final ids = files.map((f) => f.messageId).toList();
+      await _telegram.execute(DeleteMessages(
+        chatId: cid,
+        messageIds: ids,
+        revoke: true,
+      ));
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+    }
+  }
+
   Future<void> forwardMessage(DriveFile file, DriveFolder targetFolder) async {
     final fromChatId = _activeFolder?.chatId;
     final toChatId = targetFolder.chatId;

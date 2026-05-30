@@ -45,12 +45,16 @@ class FavoritesService extends ChangeNotifier {
     String sourceChatId,
     String sourceAccessHash,
   ) async {
-    final exists = _favorites.any((f) => f.messageId == file.messageId);
-    if (exists) {
-      await _api.removeFavorite(file.messageId);
-    } else {
-      await _api.addFavorite(file.messageId, sourceChatId, sourceAccessHash);
+    try {
+      final exists = _favorites.any((f) => f.messageId == file.messageId);
+      if (exists) {
+        await _api.removeFavorite(file.messageId);
+      } else {
+        await _api.addFavorite(file.messageId, sourceChatId, sourceAccessHash);
+      }
+      await fetchFavorites();
+    } catch (e) {
+      debugPrint('Failed to toggle favorite: $e');
     }
-    await fetchFavorites();
   }
 }

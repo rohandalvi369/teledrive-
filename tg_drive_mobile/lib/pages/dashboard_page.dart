@@ -70,7 +70,6 @@ class _DashboardPageState extends State<DashboardPage>
       fs.fetchFolders();
       _loadStats();
       _loadRecents();
-      _autoPurge();
     });
   }
 
@@ -114,14 +113,6 @@ class _DashboardPageState extends State<DashboardPage>
       if (mounted) setState(() => _recentsLoaded = true);
     }
   }
-
-  Future<void> _autoPurge() async {
-    try {
-      final ts = context.read<TrashService>();
-      await ts.purge();
-    } catch (_) {}
-  }
-
 
   void _exitMultiSelect() {
     setState(() {
@@ -302,15 +293,29 @@ class _DashboardPageState extends State<DashboardPage>
       ),
     );
     if (confirm != true) return;
+    final files = _selectedFiles.toList();
+    _exitMultiSelect();
     try {
       final ts = context.read<TrashService>();
       final chatId = fs.activeFolder?.chatId;
-      if (chatId == null) return;
-      await ts.moveToTrash(_selectedFiles.toList(), chatId.toString(), '');
+      if (chatId != null) {
+        await ts.moveToTrash(files, chatId.toString(), '');
+      }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+      debugPrint('Trash API failed (expected without accessHash): $e');
     }
-    _exitMultiSelect();
+    try {
+      await fs.deleteMessages(files);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${files.length} file(s) moved to trash')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+      }
+    }
     if (fs.activeFolder != null) fs.fetchFiles(fs.activeFolder!);
   }
 
@@ -320,8 +325,23 @@ class _DashboardPageState extends State<DashboardPage>
       builder: (ctx) => FolderPickerSheet(folders: fs.folders.where((f) => f.id != fs.activeFolder?.id).toList()),
     );
     if (targetFolder == null) return;
-    for (final file in _selectedFiles) await fs.forwardMessage(file, targetFolder);
+    final files = _selectedFiles.toList();
     _exitMultiSelect();
+    try {
+      for (final file in files) {
+        await fs.forwardMessage(file, targetFolder);
+      }
+      await fs.deleteMessages(files);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${files.length} file(s) moved to ${targetFolder.title}')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Move failed: $e')));
+      }
+    }
     if (fs.activeFolder != null) fs.fetchFiles(fs.activeFolder!);
   }
 

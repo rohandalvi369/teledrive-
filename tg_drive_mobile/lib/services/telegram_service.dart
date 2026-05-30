@@ -439,6 +439,11 @@ class TelegramService extends ChangeNotifier {
         _authState = 'closed';
         _initialized = false;
         notifyListeners();
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          if (_authState == 'closed') {
+            initialize();
+          }
+        });
         break;
       case AuthorizationStateLoggingOut():
         _currentStep = AuthStep.initializing;
