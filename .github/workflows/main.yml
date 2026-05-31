@@ -101,7 +101,7 @@ jobs:
           echo "API_HASH=${{ secrets.API_HASH }}" >> .env
 
       - name: Build debug APK
-        run: flutter build apk --debug
+        run: flutter build apk --debug --dart-define=API_ID=${{ secrets.API_ID }} --dart-define=API_HASH=${{ secrets.API_HASH }}
 
       - name: Rename APK
         run: |
@@ -116,7 +116,7 @@ jobs:
           if-no-files-found: error
 
       - name: Build release APK (unsigned)
-        run: flutter build apk --release
+        run: flutter build apk --release --dart-define=API_ID=${{ secrets.API_ID }} --dart-define=API_HASH=${{ secrets.API_HASH }}
 
       - name: Upload unsigned release APK
         uses: actions/upload-artifact@v4

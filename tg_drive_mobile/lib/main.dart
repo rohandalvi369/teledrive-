@@ -43,7 +43,12 @@ void main() async {
     );
   };
 
-  await dotenv.load(fileName: '.env');
+  try {
+    await dotenv.load(fileName: '.env');
+    debugPrint('DOTENV: loaded, API_ID=${dotenv.env['API_ID']}');
+  } catch (e) {
+    debugPrint('DOTENV: load failed: $e');
+  }
 
   await NotificationService().init();
 

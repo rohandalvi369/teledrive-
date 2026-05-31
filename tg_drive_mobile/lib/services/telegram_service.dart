@@ -13,8 +13,24 @@ class TelegramService extends ChangeNotifier {
   static TelegramService? _instance;
   static TelegramService get instance => _instance!;
 
-  static final int _kApiId = int.tryParse(dotenv.env['API_ID'] ?? '') ?? 0;
-  static final String _kApiHash = dotenv.env['API_HASH'] ?? '';
+  static final int _kApiId = _readApiId();
+  static final String _kApiHash = _readApiHash();
+
+  static int _readApiId() {
+    final fromDefine = int.fromEnvironment('API_ID');
+    if (fromDefine != 0) return fromDefine;
+    final fromDotenv = int.tryParse(dotenv.env['API_ID'] ?? '');
+    if (fromDotenv != null && fromDotenv != 0) return fromDotenv;
+    return 0;
+  }
+
+  static String _readApiHash() {
+    const fromDefine = String.fromEnvironment('API_HASH');
+    if (fromDefine.isNotEmpty) return fromDefine;
+    final fromDotenv = dotenv.env['API_HASH'];
+    if (fromDotenv != null && fromDotenv.isNotEmpty) return fromDotenv;
+    return '';
+  }
 
   TdlibIsolate? _tdlib;
   bool _initialized = false;
