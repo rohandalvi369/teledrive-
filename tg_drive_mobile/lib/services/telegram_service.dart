@@ -338,6 +338,23 @@ class TelegramService extends ChangeNotifier {
       return;
     }
 
+    // Handle custom error messages from isolate (before convertJsonToObject)
+    if (type == 'error') {
+      final message = json['message'] as String? ?? '';
+      debugPrint('TDLib custom error: $message');
+      if (message.startsWith('open failed') ||
+          message.startsWith('create client id failed') ||
+          message.startsWith('isolate crash')) {
+        _error = 'TDLib init: $message';
+        if (_loading) {
+          _loadingTimer?.cancel();
+          _loading = false;
+        }
+        notifyListeners();
+        return;
+      }
+    }
+
     // Handle auth states that handy_tdlib 2.3.10 doesn't have typed classes for
     if (type == 'updateAuthorizationState') {
       final authStateRaw = json['authorization_state'] as Map<String, dynamic>?;

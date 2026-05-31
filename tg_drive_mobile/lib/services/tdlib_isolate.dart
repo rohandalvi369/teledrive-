@@ -34,6 +34,8 @@ class TdlibIsolate {
       if (msg is Map && msg['@type'] == 'ready') {
         _cmdPort = msg['port'] as SendPort;
         ready.complete();
+      } else if (msg is Map && msg['@type'] == 'error' && !ready.isCompleted) {
+        ready.completeError(Exception('${msg['message']}'));
       } else if (msg is Map<String, dynamic>) {
         _updates.add(msg);
       } else if (msg is Map) {
@@ -77,55 +79,53 @@ void _entry(Map<String, dynamic> msg) {
   final sendPort = msg['send_port'] as SendPort;
   final params = msg['params'] as Map<String, dynamic>;
 
-  DynamicLibrary lib;
   try {
-    lib = DynamicLibrary.open('libtdjson.so');
-  } catch (e) {
-    sendPort.send({'@type': 'error', 'message': 'open failed: $e'});
-    return;
-  }
+    final lib = DynamicLibrary.open('libtdjson.so');
 
-  // Use the NEW TDLib API: integer client IDs, not pointers
-  late int clientId;
-  try {
-    final fn = lib.lookupFunction<TdCreateClientIdC, TdCreateClientIdDart>(
-        'td_create_client_id');
-    clientId = fn();
-  } catch (e) {
-    sendPort.send({'@type': 'error', 'message': 'create client id failed: $e'});
-    return;
-  }
-
-  final tdSend =
-      lib.lookupFunction<TdSendC, TdSendDart>('td_send');
-  final tdReceive =
-      lib.lookupFunction<TdReceiveC, TdReceiveDart>('td_receive');
-
-  final cmdPort = ReceivePort();
-  sendPort.send({'@type': 'ready', 'port': cmdPort.sendPort});
-
-  // Send setTdlibParameters immediately
-  _sendInit(tdSend, clientId, params);
-  _drain(tdReceive, sendPort);
-
-  cmdPort.listen((cmd) {
-    if (cmd is Map) {
-      if (cmd['command'] == 'send') {
-        final json = cmd['json'] as String;
-        final ptr = json.toNativeUtf8();
-        tdSend(clientId, ptr);
-        calloc.free(ptr);
-        _drain(tdReceive, sendPort);
-      } else if (cmd['command'] == 'close') {
-        cmdPort.close();
-      }
+    late int clientId;
+    try {
+      final fn = lib.lookupFunction<TdCreateClientIdC, TdCreateClientIdDart>(
+          'td_create_client_id');
+      clientId = fn();
+    } catch (e) {
+      sendPort
+          .send({'@type': 'error', 'message': 'create client id failed: $e'});
+      return;
     }
-  });
 
-  // Periodically poll for unsolicited updates
-  Timer.periodic(const Duration(milliseconds: 300), (_) {
+    final tdSend = lib.lookupFunction<TdSendC, TdSendDart>('td_send');
+    final tdReceive =
+        lib.lookupFunction<TdReceiveC, TdReceiveDart>('td_receive');
+
+    final cmdPort = ReceivePort();
+    sendPort.send({'@type': 'ready', 'port': cmdPort.sendPort});
+
+    _sendInit(tdSend, clientId, params);
     _drain(tdReceive, sendPort);
-  });
+
+    cmdPort.listen((cmd) {
+      if (cmd is Map) {
+        if (cmd['command'] == 'send') {
+          final json = cmd['json'] as String;
+          final ptr = json.toNativeUtf8();
+          tdSend(clientId, ptr);
+          calloc.free(ptr);
+          _drain(tdReceive, sendPort);
+        } else if (cmd['command'] == 'close') {
+          cmdPort.close();
+        }
+      }
+    });
+
+    Timer.periodic(const Duration(milliseconds: 300), (_) {
+      _drain(tdReceive, sendPort);
+    });
+  } catch (e, stack) {
+    sendPort.send({
+      '@type': 'error',
+      'message': 'isolate crash: $e\n$stack',
+    });
+  }
 }
 
 void _sendInit(TdSendDart tdSend, int clientId, Map<String, dynamic> params) {
