@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
@@ -41,6 +42,8 @@ void main() async {
       ),
     );
   };
+
+  await dotenv.load(fileName: '.env');
 
   await NotificationService().init();
 

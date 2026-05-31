@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:handy_tdlib/handy_tdlib.dart';
 import 'package:path_provider/path_provider.dart';
 import 'tdlib_isolate.dart';
@@ -12,8 +13,8 @@ class TelegramService extends ChangeNotifier {
   static TelegramService? _instance;
   static TelegramService get instance => _instance!;
 
-  static const int _kApiId = int.fromEnvironment('API_ID');
-  static const String _kApiHash = String.fromEnvironment('API_HASH');
+  static final int _kApiId = int.tryParse(dotenv.env['API_ID'] ?? '') ?? 0;
+  static final String _kApiHash = dotenv.env['API_HASH'] ?? '';
 
   TdlibIsolate? _tdlib;
   bool _initialized = false;
