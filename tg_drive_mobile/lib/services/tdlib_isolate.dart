@@ -2,180 +2,113 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
-import 'dart:isolate';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
-
-// New TDLib JSON API: uses integer client IDs
-typedef TdCreateClientIdC = Int32 Function();
-typedef TdCreateClientIdDart = int Function();
-typedef TdSendC = Void Function(Int32, Pointer<Utf8>);
-typedef TdSendDart = void Function(int, Pointer<Utf8>);
-typedef TdReceiveC = Pointer<Utf8> Function(Double);
-typedef TdReceiveDart = Pointer<Utf8> Function(double);
+import 'package:handy_tdlib/client.dart';
 
 class TdlibIsolate {
-  SendPort? _cmdPort;
-  late final ReceivePort _respPort;
+  int _clientId = -1;
+  bool _ready = false;
+  Timer? _pollTimer;
   final StreamController<Map<String, dynamic>> _updates =
       StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get updates => _updates.stream;
-  bool get isReady => _cmdPort != null;
+  bool get isReady => _ready;
 
   Future<void> start({
     required int apiId,
     required String apiHash,
     required String databasePath,
   }) async {
-    _respPort = ReceivePort();
+    // Load libtdjson.so on main thread via TdPlugin
+    try {
+      await TdPlugin.initialize();
+      debugPrint('TDLIB: TdPlugin initialized');
+    } catch (e) {
+      throw Exception('open failed: $e');
+    }
 
-    final ready = Completer<void>();
-    _respPort.listen((msg) {
-      if (msg is Map && msg['@type'] == 'ready') {
-        _cmdPort = msg['port'] as SendPort;
-        debugPrint('TDLIB: ready received, cmdPort set');
-        ready.complete();
-      } else if (msg is Map && msg['@type'] == 'error' && !ready.isCompleted) {
-        debugPrint('TDLIB: init error: ${msg['message']}');
-        ready.completeError(Exception('${msg['message']}'));
-      } else if (msg is Map<String, dynamic>) {
-        _updates.add(msg);
-      } else if (msg is Map) {
-        _updates.add(Map<String, dynamic>.from(msg));
-      }
-    });
+    _clientId = TdPlugin.instance.tdCreateClientId();
+    debugPrint('TDLIB: client created, id=$_clientId');
 
-    final params = {
+    final request = {
+      '@type': 'setTdlibParameters',
+      'database_directory': '$databasePath/db',
+      'files_directory': '$databasePath/files',
+      'use_test_dc': false,
       'api_id': apiId,
       'api_hash': apiHash,
-      'database_path': databasePath,
+      'system_language_code': 'en',
+      'device_model':
+          '${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
+      'system_version': Platform.operatingSystemVersion,
+      'application_version': '1.0.0',
+      'enable_storage_optimizer': true,
+      'ignore_file_names': false,
     };
+    _sendJson(request);
 
-    await Isolate.spawn(
-      _entry,
-      {'send_port': _respPort.sendPort, 'params': params},
-    );
+    final encRequest = {
+      '@type': 'checkDatabaseEncryptionKey',
+      'encryption_key': '',
+    };
+    _sendJson(encRequest);
 
-    await ready.future.timeout(const Duration(seconds: 30));
+    _ready = true;
+    debugPrint('TDLIB: ready');
+
+    // Drain any initial responses immediately
+    _pollUpdates();
+
+    // Periodic polling
+    _pollTimer = Timer.periodic(const Duration(milliseconds: 300), (_) {
+      _pollUpdates();
+    });
+
+    // One extra drain after a short delay to catch init responses
+    Future.delayed(const Duration(milliseconds: 100), _pollUpdates);
+  }
+
+  void _pollUpdates() {
+    for (int i = 0; i < 30; i++) {
+      try {
+        final result = TdPlugin.instance.tdReceive(0.01);
+        if (result == null) break;
+        final decoded = jsonDecode(result) as Map<String, dynamic>;
+        _updates.add(decoded);
+      } catch (e) {
+        debugPrint('TDLIB: poll error: $e');
+        break;
+      }
+    }
   }
 
   bool sendRaw(Map<String, dynamic> request) {
-    if (_cmdPort == null) {
-      debugPrint('TDLIB: sendRaw FAIL - _cmdPort is null, type=${request['@type']}');
+    if (!_ready) {
+      debugPrint(
+          'TDLIB: sendRaw FAIL - not ready, type=${request['@type']}');
       return false;
     }
-    debugPrint('TDLIB: sendRaw OK - type=${request['@type']}');
-    _cmdPort!.send({'command': 'send', 'json': jsonEncode(request)});
+    debugPrint('TDLIB: sendRaw type=${request['@type']}');
+    _sendJson(request);
+    _pollUpdates();
     return true;
   }
 
+  void _sendJson(Map<String, dynamic> request) {
+    final json = jsonEncode(request);
+    TdPlugin.instance.tdSend(_clientId, json);
+  }
+
   void close() {
-    _cmdPort?.send({'command': 'close'});
-    _respPort.close();
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    _ready = false;
+  }
+
+  void dispose() {
+    close();
     _updates.close();
-  }
-
-  void dispose() => close();
-}
-
-void _entry(Map<String, dynamic> msg) {
-  final sendPort = msg['send_port'] as SendPort;
-  final params = msg['params'] as Map<String, dynamic>;
-
-  try {
-    final lib = DynamicLibrary.open('libtdjson.so');
-
-    late int clientId;
-    try {
-      final fn = lib.lookupFunction<TdCreateClientIdC, TdCreateClientIdDart>(
-          'td_create_client_id');
-      clientId = fn();
-    } catch (e) {
-      sendPort
-          .send({'@type': 'error', 'message': 'create client id failed: $e'});
-      return;
-    }
-
-    final tdSend = lib.lookupFunction<TdSendC, TdSendDart>('td_send');
-    final tdReceive =
-        lib.lookupFunction<TdReceiveC, TdReceiveDart>('td_receive');
-
-    final cmdPort = ReceivePort();
-    sendPort.send({'@type': 'ready', 'port': cmdPort.sendPort});
-
-    _sendInit(tdSend, clientId, params);
-    _drain(tdReceive, sendPort);
-
-    cmdPort.listen((cmd) {
-      if (cmd is Map) {
-        if (cmd['command'] == 'send') {
-          final json = cmd['json'] as String;
-          final ptr = json.toNativeUtf8();
-          tdSend(clientId, ptr);
-          calloc.free(ptr);
-          _drain(tdReceive, sendPort);
-        } else if (cmd['command'] == 'close') {
-          cmdPort.close();
-        }
-      }
-    });
-
-    Timer.periodic(const Duration(milliseconds: 300), (_) {
-      _drain(tdReceive, sendPort);
-    });
-  } catch (e, stack) {
-    sendPort.send({
-      '@type': 'error',
-      'message': 'isolate crash: $e\n$stack',
-    });
-  }
-}
-
-void _sendInit(TdSendDart tdSend, int clientId, Map<String, dynamic> params) {
-  final apiId = params['api_id'] as int;
-  final apiHash = params['api_hash'] as String;
-  final dbPath = params['database_path'] as String;
-
-  final request = {
-    '@type': 'setTdlibParameters',
-    'database_directory': '$dbPath/db',
-    'files_directory': '$dbPath/files',
-    'use_test_dc': false,
-    'api_id': apiId,
-    'api_hash': apiHash,
-    'system_language_code': 'en',
-    'device_model':
-        '${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
-    'system_version': Platform.operatingSystemVersion,
-    'application_version': '1.0.0',
-    'enable_storage_optimizer': true,
-    'ignore_file_names': false,
-  };
-
-  var ptr = jsonEncode(request).toNativeUtf8();
-  tdSend(clientId, ptr);
-  calloc.free(ptr);
-
-  // Also check database encryption key so TDLib progresses past WaitEncryptionKey
-  final encRequest = {
-    '@type': 'checkDatabaseEncryptionKey',
-    'encryption_key': '',
-  };
-  ptr = jsonEncode(encRequest).toNativeUtf8();
-  tdSend(clientId, ptr);
-  calloc.free(ptr);
-}
-
-void _drain(TdReceiveDart tdReceive, SendPort sendPort) {
-  for (int i = 0; i < 30; i++) {
-    final ptr = tdReceive(0.01);
-    if (ptr == nullptr) break;
-    final str = ptr.toDartString();
-    try {
-      sendPort.send(jsonDecode(str) as Map<String, dynamic>);
-    } catch (e) {
-      debugPrint('TDLib parse error: $e');
-    }
   }
 }
