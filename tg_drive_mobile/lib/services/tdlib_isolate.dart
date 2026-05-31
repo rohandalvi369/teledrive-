@@ -10,6 +10,8 @@ class TdlibIsolate {
   Timer? _pollTimer;
   final StreamController<Map<String, dynamic>> _updates =
       StreamController<Map<String, dynamic>>.broadcast();
+  final Map<String, Completer<Map<String, dynamic>>> _pending = {};
+  int _extraCounter = 0;
 
   Stream<Map<String, dynamic>> get updates => _updates.stream;
   bool get isReady => _ready;
@@ -19,18 +21,18 @@ class TdlibIsolate {
     required String apiHash,
     required String databasePath,
   }) async {
-    // Load libtdjson.so on main thread via TdPlugin
     try {
       await TdPlugin.initialize();
-      debugPrint('TDLIB: TdPlugin initialized');
     } catch (e) {
-      throw Exception('open failed: $e');
+      throw Exception('TdPlugin init failed: $e');
     }
 
     _clientId = TdPlugin.instance.tdCreateClientId();
-    debugPrint('TDLIB: client created, id=$_clientId');
+    if (_clientId < 0) {
+      throw Exception('Failed to create TDLib client');
+    }
 
-    final request = {
+    _send({
       '@type': 'setTdlibParameters',
       'database_directory': '$databasePath/db',
       'files_directory': '$databasePath/files',
@@ -44,59 +46,79 @@ class TdlibIsolate {
       'application_version': '1.0.0',
       'enable_storage_optimizer': true,
       'ignore_file_names': false,
-    };
-    _sendJson(request);
-
-    final encRequest = {
-      '@type': 'checkDatabaseEncryptionKey',
-      'encryption_key': '',
-    };
-    _sendJson(encRequest);
-
-    _ready = true;
-    debugPrint('TDLIB: ready');
-
-    // Drain any initial responses immediately
-    _pollUpdates();
-
-    // Periodic polling
-    _pollTimer = Timer.periodic(const Duration(milliseconds: 300), (_) {
-      _pollUpdates();
     });
 
-    // One extra drain after a short delay to catch init responses
-    Future.delayed(const Duration(milliseconds: 100), _pollUpdates);
+    _send({
+      '@type': 'checkDatabaseEncryptionKey',
+      'encryption_key': '',
+    });
+
+    _ready = true;
+
+    _poll();
+
+    _pollTimer = Timer.periodic(const Duration(milliseconds: 300), (_) {
+      _poll();
+    });
   }
 
-  void _pollUpdates() {
-    for (int i = 0; i < 30; i++) {
+  Future<Map<String, dynamic>> sendRequest(
+    Map<String, dynamic> request, {
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    final extra =
+        request['@extra'] as String? ?? 'x${_extraCounter++}';
+    request['@extra'] = extra;
+    final completer = Completer<Map<String, dynamic>>();
+    _pending[extra] = completer;
+
+    _send(request);
+    _poll();
+
+    try {
+      return await completer.future.timeout(timeout);
+    } on TimeoutException {
+      _pending.remove(extra);
+      rethrow;
+    }
+  }
+
+  void send(Map<String, dynamic> request) {
+    _send(request);
+    _poll();
+  }
+
+  void _send(Map<String, dynamic> request) {
+    if (!_ready) {
+      debugPrint('TDLIB: cannot send, not ready');
+      return;
+    }
+    TdPlugin.instance.tdSend(_clientId, jsonEncode(request));
+  }
+
+  void _poll() {
+    for (int i = 0; i < 50; i++) {
       try {
-        final result = TdPlugin.instance.tdReceive(0.01);
-        if (result == null) break;
-        final decoded = jsonDecode(result) as Map<String, dynamic>;
+        final raw = TdPlugin.instance.tdReceive(0.005);
+        if (raw == null) break;
+
+        final decoded = jsonDecode(raw) as Map<String, dynamic>;
+        final extra = decoded['@extra'] as String?;
+
+        if (extra != null) {
+          final completer = _pending.remove(extra);
+          if (completer != null) {
+            completer.complete(decoded);
+            continue;
+          }
+        }
+
         _updates.add(decoded);
       } catch (e) {
-        debugPrint('TDLIB: poll error: $e');
+        debugPrint('TDLIB poll error: $e');
         break;
       }
     }
-  }
-
-  bool sendRaw(Map<String, dynamic> request) {
-    if (!_ready) {
-      debugPrint(
-          'TDLIB: sendRaw FAIL - not ready, type=${request['@type']}');
-      return false;
-    }
-    debugPrint('TDLIB: sendRaw type=${request['@type']}');
-    _sendJson(request);
-    _pollUpdates();
-    return true;
-  }
-
-  void _sendJson(Map<String, dynamic> request) {
-    final json = jsonEncode(request);
-    TdPlugin.instance.tdSend(_clientId, json);
   }
 
   void close() {

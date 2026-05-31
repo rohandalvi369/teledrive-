@@ -3,7 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../services/telegram_service.dart';
-import '../dashboard_page.dart';
+import '../../theme/app_theme.dart';
 
 class PhonePage extends StatefulWidget {
   const PhonePage({super.key});
@@ -15,9 +15,6 @@ class PhonePage extends StatefulWidget {
 class _PhonePageState extends State<PhonePage> {
   final _phoneController = TextEditingController(text: '+91');
   final _focusNode = FocusNode();
-  TelegramService? _telegram;
-  String _lastAuthState = 'waitPhone';
-  bool _errorHandled = false;
 
   @override
   void initState() {
@@ -27,48 +24,7 @@ class _PhonePageState extends State<PhonePage> {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final telegram = context.read<TelegramService>();
-    if (_telegram == null) {
-      _telegram = telegram;
-      _lastAuthState = telegram.authState;
-      telegram.addListener(_onAuthChange);
-    }
-  }
-
-  void _onAuthChange() {
-    final ts = _telegram!;
-
-    if (ts.authState != _lastAuthState) {
-      _lastAuthState = ts.authState;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (ts.authState == 'ready') {
-          Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const DashboardPage()), (route) => false);
-        }
-      });
-    }
-
-    if (ts.error != null && !ts.loading && !_errorHandled) {
-      _errorHandled = true;
-      final err = ts.error!;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(err, style: GoogleFonts.inter(fontSize: 14)),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFF1A1A2E),
-        ));
-      });
-    } else if (ts.error == null) {
-      _errorHandled = false;
-    }
-  }
-
-  @override
   void dispose() {
-    _telegram?.removeListener(_onAuthChange);
     _phoneController.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -86,7 +42,7 @@ class _PhonePageState extends State<PhonePage> {
     final hasNumber = _phoneController.text.trim().isNotEmpty;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0F),
+      backgroundColor: AppColors.bg,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -98,10 +54,10 @@ class _PhonePageState extends State<PhonePage> {
                 Container(
                   width: 100, height: 100,
                   decoration: const BoxDecoration(
-                    color: Color(0xFF1A1A2E),
+                    color: AppColors.surfaceElevated,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.cloud, size: 48, color: Color(0xFF2AABEE)),
+                  child: const Icon(Icons.cloud, size: 48, color: AppColors.primary),
                 ).animate().fadeIn(duration: 500.ms).scaleXY(begin: 0.7, end: 1, curve: Curves.easeOutCubic),
                 const SizedBox(height: 32),
                 Text('TeleDrive',
@@ -109,36 +65,56 @@ class _PhonePageState extends State<PhonePage> {
                   .animate().fadeIn(duration: 400.ms, delay: 150.ms).slideY(begin: 20, end: 0, curve: Curves.easeOutCubic),
                 const SizedBox(height: 8),
                 Text('Your Telegram Cloud',
-                    style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF8B8FA8)))
+                    style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary))
                   .animate().fadeIn(duration: 400.ms, delay: 250.ms),
                 const SizedBox(height: 48),
 
                 Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1A1A2E),
+                    color: AppColors.surfaceElevated,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFF2A2A3E)),
+                    border: Border.all(color: AppColors.border),
                   ),
                   padding: const EdgeInsets.all(4),
                   child: TextField(
                     controller: _phoneController,
                     focusNode: _focusNode,
                     keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.go,
+                    onSubmitted: hasNumber ? (v) => _submit(telegram) : null,
                     style: GoogleFonts.inter(fontSize: 15, color: Colors.white),
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       hintText: '+1 234 567 890',
-                      hintStyle: GoogleFonts.inter(fontSize: 15, color: const Color(0xFF8B8FA8)),
+                      hintStyle: TextStyle(color: AppColors.textSecondary),
                       prefixIcon: Padding(
-                        padding: const EdgeInsets.only(left: 16),
-                        child: Icon(Icons.phone_rounded, color: const Color(0xFF8B8FA8), size: 20),
+                        padding: EdgeInsets.only(left: 16),
+                        child: Icon(Icons.phone_rounded, color: AppColors.textSecondary, size: 20),
                       ),
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 18),
                     ),
                   ),
                 ).animate().fadeIn(duration: 400.ms, delay: 350.ms).slideY(begin: 15, end: 0, curve: Curves.easeOutCubic),
+
+                if (telegram.error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                      ),
+                      child: Text(telegram.error!,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(fontSize: 13, color: AppColors.error)),
+                    ),
+                  ),
+
                 const SizedBox(height: 24),
 
                 Container(
@@ -147,12 +123,12 @@ class _PhonePageState extends State<PhonePage> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
                     gradient: const LinearGradient(
-                      colors: [Color(0xFF2AABEE), Color(0xFF7B61FF)],
+                      colors: [AppColors.gradientStart, AppColors.gradientEnd],
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                     ),
                     boxShadow: hasNumber && !telegram.loading
-                        ? [BoxShadow(color: const Color(0xFF2AABEE).withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))]
+                        ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))]
                         : null,
                   ),
                   child: Material(
@@ -164,7 +140,7 @@ class _PhonePageState extends State<PhonePage> {
                         child: telegram.loading
                             ? const SizedBox(width: 22, height: 22,
                                 child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                            : Text('Continue →',
+                            : const Text('Continue →',
                                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
                       ),
                     ),
@@ -173,7 +149,7 @@ class _PhonePageState extends State<PhonePage> {
                 const SizedBox(height: 24),
                 Text('By continuing you agree to our Privacy Policy',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF8B8FA8)))
+                    style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary))
                   .animate().fadeIn(duration: 400.ms, delay: 550.ms),
                 const SizedBox(height: 40),
               ],

@@ -32,7 +32,7 @@ class _AuthFlowState extends State<AuthFlow> {
     final telegram = context.watch<TelegramService>();
 
     if (telegram.currentStep == AuthStep.initializing) {
-      return _buildLoading(context, telegram);
+      return _buildLoading(telegram);
     }
 
     switch (telegram.currentStep) {
@@ -45,13 +45,13 @@ class _AuthFlowState extends State<AuthFlow> {
       case AuthStep.ready:
         return const SizedBox.shrink();
       case AuthStep.closed:
-        return _buildReconnect(context);
+        return _buildReconnect();
       default:
-        return _buildLoading(context, telegram);
+        return _buildLoading(telegram);
     }
   }
 
-  Widget _buildLoading(BuildContext context, TelegramService telegram) {
+  Widget _buildLoading(TelegramService telegram) {
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: Center(
@@ -68,7 +68,8 @@ class _AuthFlowState extends State<AuthFlow> {
                 ],
               ),
               child: const Icon(Icons.cloud, size: 48, color: AppColors.primary),
-            ).animate().shake(duration: 2000.ms).then().shimmer(duration: 2000.ms, color: AppColors.primary.withValues(alpha: 0.1)),
+            ).animate().shake(duration: 2000.ms).then().shimmer(
+                duration: 2000.ms, color: AppColors.primary.withValues(alpha: 0.1)),
             const SizedBox(height: 24),
             Text('TeleDrive',
                 style: GoogleFonts.inter(fontSize: 32, fontWeight: FontWeight.w600, color: Colors.white)),
@@ -104,7 +105,7 @@ class _AuthFlowState extends State<AuthFlow> {
     );
   }
 
-  Widget _buildReconnect(BuildContext context) {
+  Widget _buildReconnect() {
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: Center(
@@ -137,7 +138,9 @@ class _AuthFlowState extends State<AuthFlow> {
                   child: Center(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 32),
-                      child: Text('Reconnect', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w500, color: AppColors.primary)),
+                      child: Text('Reconnect',
+                          style: GoogleFonts.inter(
+                              fontSize: 16, fontWeight: FontWeight.w500, color: AppColors.primary)),
                     ),
                   ),
                 ),
