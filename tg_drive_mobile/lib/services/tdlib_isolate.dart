@@ -55,8 +55,13 @@ class TdlibIsolate {
     await ready.future.timeout(const Duration(seconds: 30));
   }
 
-  void sendRaw(Map<String, dynamic> request) {
-    _cmdPort?.send({'command': 'send', 'json': jsonEncode(request)});
+  bool sendRaw(Map<String, dynamic> request) {
+    if (_cmdPort == null) {
+      debugPrint('sendRaw: _cmdPort is null, dropping request ${request['@type']}');
+      return false;
+    }
+    _cmdPort!.send({'command': 'send', 'json': jsonEncode(request)});
+    return true;
   }
 
   void close() {

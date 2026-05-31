@@ -156,12 +156,13 @@ class TelegramService extends ChangeNotifier {
 
   Timer? _loadingTimer;
 
-  void _resetLoadingAfterTimeout() {
+  void _resetLoadingAfterTimeout({int seconds = 60}) {
     _loadingTimer?.cancel();
-    _loadingTimer = Timer(const Duration(seconds: 30), () {
+    _loadingTimer = Timer(Duration(seconds: seconds), () {
       if (_loading) {
         _loading = false;
         _error = 'Connection timeout. Check your internet and try again.';
+        debugPrint('_resetLoadingAfterTimeout fired after ${seconds}s');
         notifyListeners();
       }
     });
@@ -182,7 +183,8 @@ class TelegramService extends ChangeNotifier {
     final normalized = phone.startsWith('+') ? phone : '+$phone';
     debugPrint('Sending code to: $normalized');
     debugPrint('Current authState: $_authState, step: $_currentStep');
-    _sendRequest('setAuthenticationPhoneNumber', {
+    debugPrint('_cmdPort null? ${_tdlib == null ? "tdlib is null" : "tdlib ok"}');
+    _sendAuthRequest('setAuthenticationPhoneNumber', {
       'phone_number': normalized,
       'settings': {
         '@type': 'phoneNumberAuthenticationSettings',
@@ -199,7 +201,7 @@ class TelegramService extends ChangeNotifier {
     _error = null;
     _resetLoadingAfterTimeout();
     notifyListeners();
-    _sendRequest('checkAuthenticationCode', {'code': code});
+    _sendAuthRequest('checkAuthenticationCode', {'code': code});
   }
 
   void checkPassword(String password) {
@@ -207,7 +209,7 @@ class TelegramService extends ChangeNotifier {
     _error = null;
     _resetLoadingAfterTimeout();
     notifyListeners();
-    _sendRequest('checkAuthenticationPassword', {'password': password});
+    _sendAuthRequest('checkAuthenticationPassword', {'password': password});
   }
 
   void logout() {
@@ -227,8 +229,43 @@ class TelegramService extends ChangeNotifier {
     }
   }
 
+  void _sendAuthRequest(String type, Map<String, dynamic> params) {
+    final extra = 'auth_${_requestCounter++}';
+    final completer = Completer<Map<String, dynamic>>();
+    _pendingRequests[extra] = completer;
+    final request = <String, dynamic>{'@type': type, '@extra': extra}..addAll(params);
+    try {
+      _sendJson(request);
+    } catch (e) {
+      debugPrint('_sendAuthRequest failed for $type: $e');
+      _loadingTimer?.cancel();
+      _loading = false;
+      _error = 'TDLib communication error: $e';
+      notifyListeners();
+      return;
+    }
+    completer.future.timeout(const Duration(seconds: 60)).then((resp) {
+      if (_loading) {
+        _loadingTimer?.cancel();
+        _loading = false;
+        _error = null;
+        notifyListeners();
+      }
+    }).catchError((e) {
+      if (_loading) {
+        _loadingTimer?.cancel();
+        _loading = false;
+        _error = 'Connection timeout. Check your internet and try again.';
+        notifyListeners();
+      }
+    });
+  }
+
   void _sendJson(Map<String, dynamic> request) {
-    _tdlib?.sendRaw(request);
+    if (_tdlib == null) throw Exception('TDLib not initialized');
+    if (!_tdlib!.sendRaw(request)) {
+      throw Exception('TDLib isolate not ready (cmdPort is null)');
+    }
   }
 
   Future<Map<String, dynamic>> sendMessageAndWait(
@@ -410,7 +447,7 @@ class TelegramService extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('TDLib process error for $type: $e');
-      if (type == 'updateAuthorizationState') {
+      if (_loading) {
         _loadingTimer?.cancel();
         _loading = false;
         notifyListeners();
@@ -421,25 +458,6 @@ class TelegramService extends ChangeNotifier {
   void _handleAuthState(AuthorizationState state) {
     _loadingTimer?.cancel();
     switch (state) {
-      case AuthorizationStateWaitTdlibParameters():
-        _sendJson({
-          '@type': 'setTdlibParameters',
-          'use_test_dc': false,
-          'api_id': _kApiId,
-          'api_hash': _kApiHash,
-          'system_language_code': 'en',
-          'device_model': 'Android',
-          'system_version': 'Unknown',
-          'application_version': '1.0',
-          'database_directory': '${_dbPath ?? "."}/db',
-          'files_directory': '${_dbPath ?? "."}/files',
-          'use_file_database': true,
-          'use_chat_info_database': true,
-          'use_message_database': true,
-          'use_secret_chats': false,
-          'enable_storage_optimizer': true,
-        });
-        break;
       case AuthorizationStateWaitPhoneNumber():
         _currentStep = AuthStep.phone;
         _authState = 'waitPhone';
