@@ -21,6 +21,7 @@ class TdlibIsolate {
       StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get updates => _updates.stream;
+  bool get isReady => _cmdPort != null;
 
   Future<void> start({
     required int apiId,
@@ -33,8 +34,10 @@ class TdlibIsolate {
     _respPort.listen((msg) {
       if (msg is Map && msg['@type'] == 'ready') {
         _cmdPort = msg['port'] as SendPort;
+        debugPrint('TDLIB: ready received, cmdPort set');
         ready.complete();
       } else if (msg is Map && msg['@type'] == 'error' && !ready.isCompleted) {
+        debugPrint('TDLIB: init error: ${msg['message']}');
         ready.completeError(Exception('${msg['message']}'));
       } else if (msg is Map<String, dynamic>) {
         _updates.add(msg);
@@ -59,9 +62,10 @@ class TdlibIsolate {
 
   bool sendRaw(Map<String, dynamic> request) {
     if (_cmdPort == null) {
-      debugPrint('sendRaw: _cmdPort is null, dropping request ${request['@type']}');
+      debugPrint('TDLIB: sendRaw FAIL - _cmdPort is null, type=${request['@type']}');
       return false;
     }
+    debugPrint('TDLIB: sendRaw OK - type=${request['@type']}');
     _cmdPort!.send({'command': 'send', 'json': jsonEncode(request)});
     return true;
   }

@@ -125,8 +125,10 @@ class TelegramService extends ChangeNotifier {
           apiHash: _kApiHash,
           databasePath: dbPath,
         );
+        debugPrint('INIT: start() succeeded, isReady=${_tdlib!.isReady}');
       } catch (e) {
         final msg = e.toString();
+        debugPrint('INIT: start() failed: $msg');
         if (msg.contains('already in use') || msg.contains('td.binlog')) {
           // Lock file issue — dispose and recreate once
           try { _tdlib!.dispose(); } catch (_) {}
@@ -137,6 +139,7 @@ class TelegramService extends ChangeNotifier {
             apiHash: _kApiHash,
             databasePath: dbPath,
           );
+          debugPrint('INIT: retry start() succeeded, isReady=${_tdlib!.isReady}');
         } else {
           rethrow;
         }
@@ -183,7 +186,7 @@ class TelegramService extends ChangeNotifier {
     final normalized = phone.startsWith('+') ? phone : '+$phone';
     debugPrint('Sending code to: $normalized');
     debugPrint('Current authState: $_authState, step: $_currentStep');
-    debugPrint('_cmdPort null? ${_tdlib == null ? "tdlib is null" : "tdlib ok"}');
+    debugPrint('INIT: setPhoneNumber called, _initialized=$_initialized, isReady=${_tdlib?.isReady}');
     _sendAuthRequest('setAuthenticationPhoneNumber', {
       'phone_number': normalized,
       'settings': {
