@@ -47,6 +47,9 @@ class TelegramService extends ChangeNotifier {
   String? _hint;
   String? get hint => _hint;
 
+  String? _phoneNumber;
+  String? get phoneNumber => _phoneNumber;
+
   bool _loading = false;
   bool get loading => _loading;
 
@@ -166,6 +169,7 @@ class TelegramService extends ChangeNotifier {
     }
 
     final normalized = phone.startsWith('+') ? phone : '+$phone';
+    _phoneNumber = normalized;
 
     try {
       final response = await _tdlib!.sendRequest({
@@ -220,6 +224,50 @@ class TelegramService extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       _error = 'Failed to check code: $e';
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  void goBack() {
+    _currentStep = AuthStep.phone;
+    _authState = 'waitPhone';
+    _error = null;
+    _loading = false;
+    notifyListeners();
+  }
+
+  Future<void> resendCode() async {
+    if (_tdlib == null || !_tdlib!.isReady) return;
+    if (_phoneNumber == null) return;
+
+    _loading = true;
+    _error = null;
+    notifyListeners();
+
+    if (!await _checkConnectivity()) {
+      _error = 'No internet connection.';
+      _loading = false;
+      notifyListeners();
+      return;
+    }
+
+    try {
+      final response = await _tdlib!.sendRequest({
+        '@type': 'resendAuthenticationCode',
+      });
+
+      if (response['@type'] == 'error') {
+        _handleErrorResponse(response);
+        _loading = false;
+        notifyListeners();
+      }
+    } on TimeoutException {
+      _error = 'Request timed out.';
+      _loading = false;
+      notifyListeners();
+    } catch (e) {
+      _error = 'Failed to resend code: $e';
       _loading = false;
       notifyListeners();
     }
@@ -430,8 +478,10 @@ class TelegramService extends ChangeNotifier {
       _currentStep = AuthStep.ready;
       _authState = 'ready';
       _loading = false;
+    } else if (code == 400) {
+      _error = message;
     } else {
-      _error = message.contains('400') ? message : 'Error [$code]: $message';
+      _error = 'Error [$code]: $message';
     }
   }
 

@@ -187,7 +187,7 @@ class _CodePageState extends State<CodePage> {
 
                     GestureDetector(
                       onTap: () {
-                        context.read<TelegramService>().setPhoneNumber('+91');
+                        context.read<TelegramService>().resendCode();
                       },
                       child: Text('Resend code',
                           style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textSecondary)),
@@ -203,7 +203,7 @@ class _CodePageState extends State<CodePage> {
               left: 8,
               child: IconButton(
                 icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textSecondary, size: 24),
-                onPressed: () => Navigator.maybePop(context),
+                onPressed: () => context.read<TelegramService>().goBack(),
               ),
             ),
           ],
