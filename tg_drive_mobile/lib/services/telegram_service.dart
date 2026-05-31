@@ -68,6 +68,17 @@ class TelegramService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> _checkConnectivity() async {
+    try {
+      final result = await InternetAddress.lookup('telegram.org')
+          .timeout(const Duration(seconds: 5));
+      if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) return true;
+    } on SocketException catch (_) {
+    } on TimeoutException catch (_) {
+    }
+    return false;
+  }
+
   Future<void> initialize() async {
     if (_initialized) return;
     _currentStep = AuthStep.initializing;
@@ -76,6 +87,14 @@ class TelegramService extends ChangeNotifier {
     notifyListeners();
 
     try {
+      if (!await _checkConnectivity()) {
+        _error = 'No internet connection. Please check your network and try again.';
+        _loading = false;
+        _currentStep = AuthStep.phone;
+        _authState = 'waitPhone';
+        notifyListeners();
+        return;
+      }
       _updateSub?.cancel();
       if (_tdlib != null) {
         try { _tdlib!.dispose(); } catch (_) {}
@@ -148,11 +167,18 @@ class TelegramService extends ChangeNotifier {
     });
   }
 
-  void setPhoneNumber(String phone) {
+  Future<void> setPhoneNumber(String phone) async {
     _loading = true;
     _error = null;
     _resetLoadingAfterTimeout();
     notifyListeners();
+    if (!await _checkConnectivity()) {
+      _error = 'No internet connection. Please check your network and try again.';
+      _loading = false;
+      _loadingTimer?.cancel();
+      notifyListeners();
+      return;
+    }
     final normalized = phone.startsWith('+') ? phone : '+$phone';
     debugPrint('Sending code to: $normalized');
     debugPrint('Current authState: $_authState, step: $_currentStep');
