@@ -264,8 +264,8 @@ app.post("/folders/create", async (req, res) => {
       new Api.channels.CreateChannel({
         title: name,
         about: "tg-drive-folder",
-        broadcast: false,
-        megagroup: true,
+        broadcast: true,
+        megagroup: false,
       })
     );
     await client.disconnect();

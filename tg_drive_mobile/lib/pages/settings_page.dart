@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/theme_service.dart';
-import '../services/backup_service.dart';
-import '../services/api_service.dart';
 import '../services/telegram_service.dart';
 import 'backup_setup_page.dart';
 import 'privacy_policy_page.dart';
@@ -16,51 +14,6 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  late TextEditingController _serverUrlCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _serverUrlCtrl = TextEditingController(text: 'http://localhost:3001');
-    _loadSavedUrl();
-  }
-
-  Future<void> _loadSavedUrl() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedUrl = prefs.getString('backup_api_url');
-      if (savedUrl != null && savedUrl.isNotEmpty && mounted) {
-        _serverUrlCtrl.text = savedUrl;
-      }
-    } catch (e) {
-      debugPrint('Failed to load saved URL: $e');
-    }
-  }
-
-  @override
-  void dispose() {
-    _serverUrlCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _saveServerUrl() async {
-    try {
-      final url = _serverUrlCtrl.text.trim();
-      if (url.isEmpty) return;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('backup_api_url', url);
-      if (mounted) {
-        context.read<ApiService>().updateBaseUrl(url);
-        context.read<BackupService>().saveServerConfig(apiUrl: url);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Server URL saved')),
-        );
-      }
-    } catch (e) {
-      debugPrint('Failed to save server URL: $e');
-    }
-  }
-
   Future<void> _clearCache() async {
     try {
       final confirmed = await showDialog<bool>(
@@ -146,40 +99,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   selected: {themeService.themeMode},
                   onSelectionChanged: (v) => themeService.setThemeMode(v.first),
                 ),
-              ]),
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Icon(Icons.dns_outlined, color: theme.colorScheme.primary),
-                  const SizedBox(width: 12),
-                  Text('Server', style: theme.textTheme.titleMedium),
-                ]),
-                const SizedBox(height: 8),
-                Text('Backend server URL for backup and sync', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 12),
-                Row(children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _serverUrlCtrl,
-                      decoration: InputDecoration(
-                        hintText: 'http://localhost:3001',
-                        isDense: true,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      ),
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton.tonal(onPressed: _saveServerUrl, child: const Text('Save')),
-                ]),
               ]),
             ),
           ),

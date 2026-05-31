@@ -1,6 +1,5 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
@@ -10,7 +9,6 @@ import 'services/theme_service.dart';
 import 'services/api_service.dart';
 import 'services/backup_service.dart';
 import 'services/trash_service.dart';
-import 'services/favorites_service.dart';
 import 'services/notification_service.dart';
 import 'services/backup_worker.dart';
 import 'theme/app_theme.dart';
@@ -42,13 +40,6 @@ void main() async {
       ),
     );
   };
-
-  try {
-    await dotenv.load(fileName: '.env');
-    debugPrint('DOTENV: loaded, API_ID=${dotenv.env['API_ID']}');
-  } catch (e) {
-    debugPrint('DOTENV: load failed: $e');
-  }
 
   await NotificationService().init();
 
@@ -83,31 +74,33 @@ class _AppWrapper extends StatelessWidget {
         ChangeNotifierProvider(
           create: (ctx) => TrashService(ctx.read<ApiService>()),
         ),
-        ChangeNotifierProvider(
-          create: (ctx) => FavoritesService(ctx.read<ApiService>()),
-        ),
       ],
       child: const TeleDriveApp(),
     );
   }
 }
 
-class TeleDriveApp extends StatelessWidget {
+class TeleDriveApp extends StatefulWidget {
   const TeleDriveApp({super.key});
 
   @override
+  State<TeleDriveApp> createState() => _TeleDriveAppState();
+}
+
+class _TeleDriveAppState extends State<TeleDriveApp> {
+  @override
   Widget build(BuildContext context) {
     final telegram = context.watch<TelegramService>();
+    final themeService = context.watch<ThemeService>();
 
     return MaterialApp(
       title: 'TeleDrive',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
+      theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.dark,
+      themeMode: themeService.themeMode,
       home: telegram.isAuthenticated
           ? const DashboardPage()
           : const AuthFlow(),
     );
-  }
-}
+  }}

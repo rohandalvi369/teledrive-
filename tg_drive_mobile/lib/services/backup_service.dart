@@ -81,6 +81,9 @@ class BackupService extends ChangeNotifier {
   bool _scanning = false;
   bool _backingUp = false;
 
+  static const int _maxBatchFiles = 5;
+  static const int _maxFileBytes = 50 * 1024 * 1024;
+
   BackupService(this._api);
 
   BackupConfig get config => _config;
@@ -146,17 +149,21 @@ class BackupService extends ChangeNotifier {
         hasAll: false,
       );
 
-      final counted = <BackupFolderInfo>[];
-      for (final a in albums) {
+      final results = await Future.wait(albums.map((a) async {
         final count = await a.assetCountAsync;
-        if (count == 0) continue;
-        final id = a.id;
+        return (album: a, count: count);
+      }));
+
+      final counted = <BackupFolderInfo>[];
+      for (final r in results) {
+        if (r.count == 0) continue;
+        final id = r.album.id;
         final isSelected = _config.selectedFolderIds.contains(id);
         final lastTime = _config.lastBackupTimestamps[id] ?? 0;
         counted.add(BackupFolderInfo(
           id: id,
-          name: a.name,
-          fileCount: count,
+          name: r.album.name,
+          fileCount: r.count,
           selected: isSelected,
           backedUp: lastTime > 0,
           lastBackupTime: lastTime,
@@ -317,14 +324,15 @@ class BackupService extends ChangeNotifier {
           continue;
         }
 
-        final batchFiles = <Map<String, String>>[];
+        final allBatchFiles = <Map<String, String>>[];
         int totalBytes = 0;
+        int skippedLarge = 0;
 
         for (int i = 0; i < newAssets.length; i++) {
           final asset = newAssets[i];
           _progress = BackupProgress(
             folderName: folder.name,
-            completedFiles: i,
+            completedFiles: i - skippedLarge,
             totalFiles: newAssets.length,
             currentFile: 'Preparing file ${i + 1}/${newAssets.length}...',
             totalBytes: totalBytes,
@@ -336,33 +344,45 @@ class BackupService extends ChangeNotifier {
           if (file == null) continue;
 
           final bytes = await file.readAsBytes();
+          if (bytes.length > _maxFileBytes) {
+            skippedLarge++;
+            continue;
+          }
           totalBytes += bytes.length;
-          batchFiles.add({
+          allBatchFiles.add({
             'fileName': asset.title ?? 'unknown',
             'data': base64Encode(bytes),
           });
         }
 
-        if (batchFiles.isEmpty) continue;
+        if (allBatchFiles.isEmpty) continue;
 
-        _progress = BackupProgress(
-          folderName: folder.name,
-          completedFiles: 0,
-          totalFiles: batchFiles.length,
-          currentFile: 'Uploading ${batchFiles.length} files...',
-          totalBytes: totalBytes,
-          uploadedBytes: 0,
-        );
-        notifyListeners();
+        int uploaded = 0;
+        for (int i = 0; i < allBatchFiles.length; i += _maxBatchFiles) {
+          final end = (i + _maxBatchFiles).clamp(0, allBatchFiles.length);
+          final chunk = allBatchFiles.sublist(i, end);
 
-        await _api.backupUploadBatch(folder.name, batchFiles);
+          _progress = BackupProgress(
+            folderName: folder.name,
+            completedFiles: uploaded,
+            totalFiles: allBatchFiles.length,
+            currentFile:
+                'Uploading batch ${i ~/ _maxBatchFiles + 1}/${(allBatchFiles.length + _maxBatchFiles - 1) ~/ _maxBatchFiles}...',
+            totalBytes: totalBytes,
+            uploadedBytes: 0,
+          );
+          notifyListeners();
+
+          await _api.backupUploadBatch(folder.name, chunk);
+          uploaded += chunk.length;
+        }
 
         final timestamps =
             Map<String, int>.from(_config.lastBackupTimestamps);
         timestamps[folderId] =
             DateTime.now().millisecondsSinceEpoch ~/ 1000;
         final counts = Map<String, int>.from(_config.fileCounts);
-        counts[folderId] = (counts[folderId] ?? 0) + batchFiles.length;
+        counts[folderId] = (counts[folderId] ?? 0) + uploaded;
         final storage = Map<String, int>.from(_config.storageUsed);
         storage[folderId] = (storage[folderId] ?? 0) + totalBytes;
 
@@ -380,8 +400,8 @@ class BackupService extends ChangeNotifier {
 
         _progress = BackupProgress(
           folderName: folder.name,
-          completedFiles: batchFiles.length,
-          totalFiles: batchFiles.length,
+          completedFiles: uploaded,
+          totalFiles: allBatchFiles.length,
           done: true,
         );
         notifyListeners();

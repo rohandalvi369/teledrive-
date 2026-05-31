@@ -15,27 +15,31 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> _post(
-      String path, Map<String, dynamic> body) async {
+    String path,
+    Map<String, dynamic> body, {
+    Duration timeout = const Duration(seconds: 15),
+    bool markUnreachable = true,
+  }) async {
     try {
       serverReachable = true;
       final resp = await _client.post(
         Uri.parse('$baseUrl$path'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(body),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(timeout);
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       if (resp.statusCode != 200) {
         throw Exception(data['error'] ?? 'Request failed');
       }
       return data;
     } on SocketException {
-      serverReachable = false;
+      if (markUnreachable) serverReachable = false;
       rethrow;
     } on TimeoutException {
-      serverReachable = false;
+      if (markUnreachable) serverReachable = false;
       rethrow;
     } on HttpException {
-      serverReachable = false;
+      if (markUnreachable) serverReachable = false;
       rethrow;
     }
   }
@@ -219,10 +223,12 @@ class ApiService {
     String folderName,
     List<Map<String, String>> files,
   ) async {
-    final data = await _post('/backup/upload-batch', {
-      'folderName': folderName,
-      'files': files,
-    });
+    final data = await _post(
+      '/backup/upload-batch',
+      {'folderName': folderName, 'files': files},
+      timeout: const Duration(seconds: 120),
+      markUnreachable: false,
+    );
     return data;
   }
 
@@ -260,26 +266,6 @@ class ApiService {
 
   Future<Map<String, dynamic>> purgeTrash() =>
       _post('/trash/purge', {});
-
-
-  Future<void> addFavorite(
-    int messageId,
-    String sourceChatId,
-    String sourceAccessHash,
-  ) =>
-      _post('/favorites/add', {
-        'messageId': messageId,
-        'sourceChatId': sourceChatId,
-        'sourceAccessHash': sourceAccessHash,
-      });
-
-  Future<void> removeFavorite(int messageId) =>
-      _post('/favorites/remove', {'messageId': messageId});
-
-  Future<List<Map<String, dynamic>>> getFavorites() async {
-    final data = await _get('/favorites');
-    return List<Map<String, dynamic>>.from(data['files'] ?? []);
-  }
 
   void dispose() {
     _client.close();

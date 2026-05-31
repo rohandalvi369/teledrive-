@@ -19,8 +19,9 @@ class _BackupSetupPageState extends State<BackupSetupPage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final bs = context.read<BackupService>();
+      await _requestPhotoPermission();
       bs.scanDeviceFolders();
       final api = context.read<ApiService>();
       bs.saveServerConfig(
@@ -30,6 +31,12 @@ class _BackupSetupPageState extends State<BackupSetupPage> {
       final fs = context.read<FileService>();
       if (fs.folders.isEmpty) fs.fetchFolders();
     });
+  }
+
+  Future<void> _requestPhotoPermission() async {
+    if (!Platform.isAndroid) return;
+    await [Permission.photos, Permission.videos].request();
+    await Permission.storage.request();
   }
 
   void _showFolderPicker(BuildContext ctx, FileService fs, BackupService bs) {
@@ -229,46 +236,53 @@ class _BackupSetupPageState extends State<BackupSetupPage> {
           Text('Device Folders',
               style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
-          if (bs.scanning)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(32),
-                child: CircularProgressIndicator(),
-              ),
-            )
-          else if (bs.folders.isEmpty)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Text('No folders found',
-                    style: theme.textTheme.bodyMedium),
-              ),
-            )
-          else
-            ...bs.folders.map((folder) => Card(
-                  margin: const EdgeInsets.only(bottom: 6),
-                  child: CheckboxListTile(
-                    value: folder.selected,
-                    onChanged: (v) =>
-                        bs.toggleFolder(folder.id, v ?? false),
-                    title: Text(folder.name),
-                    subtitle: Text(
-                      '${folder.fileCount} files'
-                      '${folder.backedUp ? ' · Last backup: ${_formatTime(folder.lastBackupTime)}' : ''}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    secondary: Icon(
-                      folder.backedUp
-                          ? Icons.cloud_done
-                          : Icons.cloud_outlined,
-                      color: folder.backedUp ? Colors.green : null,
-                    ),
-                  ),
-                )),
+          _buildFolderList(bs, theme),
         ],
       ),
+    );
+  }
+
+  Widget _buildFolderList(BackupService bs, ThemeData theme) {
+    if (bs.scanning) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+    if (bs.folders.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text('No folders found',
+              style: theme.textTheme.bodyMedium),
+        ),
+      );
+    }
+    return Column(
+      children: bs.folders.map((folder) => Card(
+            margin: const EdgeInsets.only(bottom: 6),
+            child: CheckboxListTile(
+              value: folder.selected,
+              onChanged: (v) =>
+                  bs.toggleFolder(folder.id, v ?? false),
+              title: Text(folder.name),
+              subtitle: Text(
+                '${folder.fileCount} files'
+                '${folder.backedUp ? ' · Last backup: ${_formatTime(folder.lastBackupTime)}' : ''}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              secondary: Icon(
+                folder.backedUp
+                    ? Icons.cloud_done
+                    : Icons.cloud_outlined,
+                color: folder.backedUp ? Colors.green : null,
+              ),
+            ),
+          )).toList(),
     );
   }
 

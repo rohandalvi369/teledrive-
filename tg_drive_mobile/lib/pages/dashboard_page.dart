@@ -12,7 +12,6 @@ import '../services/telegram_service.dart';
 import '../services/file_service.dart';
 import '../services/api_service.dart';
 import '../services/trash_service.dart';
-import '../services/favorites_service.dart';
 import '../models/drive_folder.dart';
 import '../models/drive_file.dart';
 import '../widgets/shimmer_list.dart';
@@ -60,7 +59,7 @@ class _DashboardPageState extends State<DashboardPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 7, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
     _scrollController.addListener(() {
       final scrolled = _scrollController.offset > 20;
       if (scrolled != _isScrolledDown) setState(() => _isScrolledDown = scrolled);
@@ -87,7 +86,9 @@ class _DashboardPageState extends State<DashboardPage>
       final api = context.read<ApiService>();
       final data = await api.getStats();
       if (mounted) setState(() => _stats = data);
-    } catch (_) {}
+    } catch (_) {
+      context.read<ApiService>().serverReachable = true;
+    }
   }
 
   Future<void> _loadRecents() async {
@@ -110,6 +111,7 @@ class _DashboardPageState extends State<DashboardPage>
         });
       }
     } catch (_) {
+      context.read<ApiService>().serverReachable = true;
       if (mounted) setState(() => _recentsLoaded = true);
     }
   }
@@ -757,8 +759,7 @@ class _DashboardPageState extends State<DashboardPage>
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
                   child: Text('QUICK LINKS', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 1.2)),
                 ),
-                _drawerItem(Icons.history_rounded, 'Recent Files', () { Navigator.pop(context); _tabController.animateTo(6); }),
-                _drawerItem(Icons.star_rounded, 'Favorites', () { Navigator.pop(context); _tabController.animateTo(5); }),
+                _drawerItem(Icons.history_rounded, 'Recent Files', () { Navigator.pop(context); _tabController.animateTo(5); }),
                 _drawerItem(Icons.backup_rounded, 'Auto Backup', () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => const BackupSetupPage())); }),
                 _drawerItem(Icons.delete_outline_rounded, 'Trash', () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => const TrashPage())); }, color: AppColors.error),
 
@@ -966,7 +967,6 @@ class _DashboardPageState extends State<DashboardPage>
               _buildPillTab(Icons.videocam_rounded, 'Videos'),
               _buildPillTab(Icons.audiotrack_rounded, 'Audio'),
               _buildPillTab(Icons.description_rounded, 'Docs'),
-              _buildPillTab(Icons.star_rounded, 'Fav'),
               _buildPillTab(Icons.history_rounded, 'Recent'),
             ],
           ),
@@ -1011,7 +1011,6 @@ class _DashboardPageState extends State<DashboardPage>
               _buildListTab(context, fs, _applySort(_applySearch(fs.videos)), icon: Icons.videocam_rounded, color: AppColors.accent),
               _buildListTab(context, fs, _applySort(_applySearch(fs.audioFiles)), icon: Icons.audiotrack_rounded, color: AppColors.success),
               _buildListTab(context, fs, _applySort(_applySearch(fs.documents)), icon: Icons.insert_drive_file_rounded, color: AppColors.textSecondary),
-              _buildFavoritesTab(context, theme),
               _buildRecentsTab(context, theme),
             ],
           ),
@@ -1181,58 +1180,6 @@ class _DashboardPageState extends State<DashboardPage>
         physics: const AlwaysScrollableScrollPhysics(),
         itemCount: files.length,
         itemBuilder: (context, index) => _buildListItem(context, fs, files[index], icon: icon, color: color),
-      ),
-    );
-  }
-
-  Widget _buildFavoritesTab(BuildContext context, ThemeData theme) {
-    final fav = context.watch<FavoritesService>();
-    if (fav.loading) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-    }
-    if (fav.favorites.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: () => fav.fetchFavorites(),
-        color: AppColors.primary,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
-            SizedBox(height: MediaQuery.of(context).size.height * 0.3),
-            Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(
-                width: 80, height: 80,
-                decoration: BoxDecoration(color: AppColors.accent.withValues(alpha: 0.1), shape: BoxShape.circle),
-                child: const Icon(Icons.star_outline_rounded, size: 40, color: AppColors.accent),
-              ),
-              const SizedBox(height: 16),
-              Text('No favorites yet', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
-              const SizedBox(height: 8),
-              Text('Tap the star icon on any file to favorite it', style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
-            ])),
-          ],
-        ),
-      );
-    }
-    final images = fav.favorites.where((f) => f.isImage).toList();
-    final videos = fav.favorites.where((f) => f.isVideo).toList();
-    final audio = fav.favorites.where((f) => f.isAudio).toList();
-    final docs = fav.favorites.where((f) => !f.isImage && !f.isVideo && !f.isAudio).toList();
-    final sections = <String, List<DriveFile>>{};
-    if (images.isNotEmpty) sections['Images'] = images;
-    if (videos.isNotEmpty) sections['Videos'] = videos;
-    if (audio.isNotEmpty) sections['Audio'] = audio;
-    if (docs.isNotEmpty) sections['Documents'] = docs;
-
-    return RefreshIndicator(
-      onRefresh: () => fav.fetchFavorites(),
-      color: AppColors.primary,
-      child: ListView(
-        controller: _scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        children: sections.entries.expand((entry) => [
-          SectionHeader(title: entry.key, count: entry.value.length),
-          ...entry.value.map((f) => _buildFavItem(context, f)),
-        ]).toList(),
       ),
     );
   }
@@ -1414,49 +1361,9 @@ class _DashboardPageState extends State<DashboardPage>
                       tooltip: 'Extract',
                       onPressed: () => _extractZip(context, fs, file),
                     ),
-                  IconButton(
-                    icon: const Icon(Icons.star_border_rounded, size: 20),
-                    color: AppColors.textSecondary,
-                    onPressed: () async {
-                      final fav = context.read<FavoritesService>();
-                      final chatId = fs.activeFolder?.chatId?.toString() ?? '';
-                      await fav.toggleFavorite(file, chatId, '');
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('${fav.favorites.any((f) => f.messageId == file.messageId) ? "Added to" : "Removed from"} favorites'), duration: const Duration(seconds: 1)),
-                      );
-                    },
-                  ),
                 ]),
             ]),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFavItem(BuildContext context, DriveFile file) {
-    IconData icon; Color color;
-    if (file.isImage) { icon = Icons.image_rounded; color = AppColors.primary; }
-    else if (file.isVideo) { icon = Icons.videocam_rounded; color = AppColors.accent; }
-    else if (file.isAudio) { icon = Icons.audiotrack_rounded; color = AppColors.success; }
-    else { icon = Icons.insert_drive_file_rounded; color = AppColors.textSecondary; }
-
-    return _buildCard(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-      child: ListTile(
-        leading: _fileIcon(icon, color),
-        title: Text(file.fileName, maxLines: 1, overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white)),
-        subtitle: Text('${_formatSize(file.size)} · ${_formatDate(file.date)}',
-            style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary)),
-        trailing: IconButton(
-          icon: const Icon(Icons.star_rounded, color: Colors.amber),
-          onPressed: () async {
-            final fav = context.read<FavoritesService>();
-            final api = context.read<ApiService>();
-            await api.removeFavorite(file.messageId);
-            await fav.fetchFavorites();
-          },
         ),
       ),
     );

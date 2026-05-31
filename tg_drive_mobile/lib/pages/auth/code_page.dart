@@ -3,7 +3,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../services/telegram_service.dart';
-import '../../theme/app_theme.dart';
 
 class CodePage extends StatefulWidget {
   const CodePage({super.key});
@@ -13,10 +12,8 @@ class CodePage extends StatefulWidget {
 }
 
 class _CodePageState extends State<CodePage> {
-  final List<TextEditingController> _controllers =
-      List.generate(5, (_) => TextEditingController());
-  final List<FocusNode> _focusNodes =
-      List.generate(5, (_) => FocusNode());
+  final List<TextEditingController> _controllers = List.generate(5, (_) => TextEditingController());
+  final List<FocusNode> _focusNodes = List.generate(5, (_) => FocusNode());
 
   @override
   void initState() {
@@ -58,7 +55,7 @@ class _CodePageState extends State<CodePage> {
 
   void _trySubmit() {
     final code = _controllers.map((c) => c.text).join();
-    if (code.length == 5) {
+    if (code.length == 5 && !context.read<TelegramService>().loading) {
       context.read<TelegramService>().checkCode(code);
     }
   }
@@ -69,7 +66,7 @@ class _CodePageState extends State<CodePage> {
     final allFilled = _controllers.every((c) => c.text.isNotEmpty);
 
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: const Color(0xFF0A0A0F),
       body: SafeArea(
         child: Stack(
           children: [
@@ -82,18 +79,18 @@ class _CodePageState extends State<CodePage> {
                     Container(
                       width: 100, height: 100,
                       decoration: const BoxDecoration(
-                        color: AppColors.surfaceElevated,
+                        color: Color(0xFF1A1A2E),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.message_outlined, size: 44, color: AppColors.primary),
+                      child: const Icon(Icons.message_outlined, size: 44, color: Color(0xFF2AABEE)),
                     ).animate().fadeIn(duration: 500.ms).scaleXY(begin: 0.7, end: 1, curve: Curves.easeOutCubic),
                     const SizedBox(height: 32),
                     Text('Enter verification code',
                         style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.w600, color: Colors.white))
                       .animate().fadeIn(duration: 400.ms, delay: 100.ms).slideY(begin: 20, end: 0, curve: Curves.easeOutCubic),
                     const SizedBox(height: 8),
-                    Text('Enter the 5-digit code from Telegram',
-                        style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary))
+                    Text('Sent to +91 XXXXXXXXXX',
+                        style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF8B8FA8)))
                       .animate().fadeIn(duration: 400.ms, delay: 200.ms),
                     const SizedBox(height: 48),
 
@@ -105,14 +102,16 @@ class _CodePageState extends State<CodePage> {
                           width: 52,
                           height: 60,
                           decoration: BoxDecoration(
-                            color: AppColors.surfaceElevated,
+                            color: const Color(0xFF1A1A2E),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: isFocused ? AppColors.primary : AppColors.border,
-                              width: 1.5,
+                              color: isFocused
+                                  ? const Color(0xFF2AABEE)
+                                  : const Color(0xFF2A2A3E),
+                              width: isFocused ? 1.5 : 1.5,
                             ),
                             boxShadow: isFocused
-                                ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.25), blurRadius: 12)]
+                                ? [BoxShadow(color: const Color(0xFF2AABEE).withValues(alpha: 0.25), blurRadius: 12)]
                                 : null,
                           ),
                           child: TextField(
@@ -134,24 +133,6 @@ class _CodePageState extends State<CodePage> {
                         );
                       }),
                     ).animate().fadeIn(duration: 400.ms, delay: 300.ms).slideY(begin: 15, end: 0, curve: Curves.easeOutCubic),
-
-                    if (telegram.error != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 16),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppColors.error.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
-                          ),
-                          child: Text(telegram.error!,
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.inter(fontSize: 13, color: AppColors.error)),
-                        ),
-                      ),
-
                     const SizedBox(height: 32),
 
                     Container(
@@ -160,12 +141,12 @@ class _CodePageState extends State<CodePage> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
                         gradient: const LinearGradient(
-                          colors: [AppColors.gradientStart, AppColors.gradientEnd],
+                          colors: [Color(0xFF2AABEE), Color(0xFF7B61FF)],
                           begin: Alignment.centerLeft,
                           end: Alignment.centerRight,
                         ),
                         boxShadow: allFilled && !telegram.loading
-                            ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))]
+                            ? [BoxShadow(color: const Color(0xFF2AABEE).withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))]
                             : null,
                       ),
                       child: Material(
@@ -177,8 +158,8 @@ class _CodePageState extends State<CodePage> {
                             child: telegram.loading
                                 ? const SizedBox(width: 22, height: 22,
                                     child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                                : const Text('Verify →',
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                                : Text('Verify →',
+                                    style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
                           ),
                         ),
                       ),
@@ -187,10 +168,11 @@ class _CodePageState extends State<CodePage> {
 
                     GestureDetector(
                       onTap: () {
-                        context.read<TelegramService>().resendCode();
+                        final telegram = context.read<TelegramService>();
+                        telegram.setPhoneNumber('');
                       },
                       child: Text('Resend code',
-                          style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textSecondary)),
+                          style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: const Color(0xFF8B8FA8))),
                     ).animate().fadeIn(duration: 400.ms, delay: 500.ms),
                     const SizedBox(height: 40),
                   ],
@@ -202,8 +184,8 @@ class _CodePageState extends State<CodePage> {
               top: 8,
               left: 8,
               child: IconButton(
-                icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textSecondary, size: 24),
-                onPressed: () => context.read<TelegramService>().goBack(),
+                icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF8B8FA8), size: 24),
+                onPressed: () => Navigator.maybePop(context),
               ),
             ),
           ],
