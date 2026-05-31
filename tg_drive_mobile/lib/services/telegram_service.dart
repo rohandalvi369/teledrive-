@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:handy_tdlib/handy_tdlib.dart';
@@ -105,6 +106,15 @@ class TelegramService extends ChangeNotifier {
       final dbPath = '${dir.path}/tdlib';
       _dbPath = dbPath;
       await Directory(dbPath).create(recursive: true);
+
+      // Pre-load libtdjson.so on the main thread so the spawned
+      // isolate's DynamicLibrary.open finds it in the dlopen cache
+      try {
+        DynamicLibrary.open('libtdjson.so');
+        debugPrint('INIT: pre-loaded libtdjson.so ok');
+      } catch (e) {
+        debugPrint('INIT: pre-load libtdjson.so FAILED: $e');
+      }
 
       _tdlib = TdlibIsolate();
 
