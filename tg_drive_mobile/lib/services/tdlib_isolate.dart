@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ffi';
 import 'dart:io';
-import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:handy_tdlib/client.dart';
 

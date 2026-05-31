@@ -30,8 +30,6 @@ class TelegramService extends ChangeNotifier {
   String? _hint;
   String? get hint => _hint;
 
-  String? _dbPath;
-
   bool _loading = false;
   bool get loading => _loading;
 
@@ -103,7 +101,6 @@ class TelegramService extends ChangeNotifier {
 
       final dir = await getApplicationDocumentsDirectory();
       final dbPath = '${dir.path}/tdlib';
-      _dbPath = dbPath;
       await Directory(dbPath).create(recursive: true);
 
       _tdlib = TdlibIsolate();
