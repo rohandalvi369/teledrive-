@@ -845,11 +845,19 @@ app.post('/backup/upload-stream', upload.array('files', 5), async (req, res) => 
     await Promise.all(uploadedFiles.map(async (file, idx) => {
       const filePath = path.resolve(file.path);
       try {
+        const stat = fs.statSync(filePath);
+        const ONE_GB = 1024 * 1024 * 1024;
+        const TWO_GB = 2 * ONE_GB;
+        if (stat.size > TWO_GB) {
+          throw new Error(
+            `File "${file.originalname}" (${(stat.size / ONE_GB).toFixed(1)}GB) exceeds Telegram's 2GB limit. Upgrade to Telegram Premium for 4GB uploads.`
+          );
+        }
         progress[idx].status = 'uploading';
         await c.sendFile(peer, {
           file: filePath,
           forceDocument: true,
-          workers: 1,
+          workers: 4,
           progressCallback: (current, total) => {
             progress[idx].progress = total > 0 ? current / total : 0;
           },

@@ -240,7 +240,7 @@ class ApiService {
     try {
       serverReachable = true;
       final streamed = await _client.send(req).timeout(
-        const Duration(minutes: 10),
+        const Duration(minutes: 60),
       );
       final resp = await http.Response.fromStream(streamed);
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
