@@ -10,7 +10,7 @@ class MultiUploadSheet extends StatefulWidget {
   final FileService fs;
   final DriveFolder folder;
   final List<PlatformFile> files;
-  const MultiUploadSheet({required this.fs, required this.folder, required this.files});
+  const MultiUploadSheet({super.key, required this.fs, required this.folder, required this.files});
 
   @override
   State<MultiUploadSheet> createState() => _MultiUploadSheetState();

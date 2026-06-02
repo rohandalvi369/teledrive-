@@ -10,7 +10,7 @@ class UploadProgressSheet extends StatefulWidget {
   final FileService fs;
   final DriveFolder folder;
   final String path;
-  const UploadProgressSheet({required this.fs, required this.folder, required this.path});
+  const UploadProgressSheet({super.key, required this.fs, required this.folder, required this.path});
 
   @override
   State<UploadProgressSheet> createState() => _UploadProgressSheetState();

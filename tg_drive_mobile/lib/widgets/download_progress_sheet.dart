@@ -9,7 +9,7 @@ import '../theme/app_theme.dart';
 class DownloadProgressSheet extends StatefulWidget {
   final FileService fs;
   final DriveFile file;
-  const DownloadProgressSheet({required this.fs, required this.file});
+  const DownloadProgressSheet({super.key, required this.fs, required this.file});
 
   @override
   State<DownloadProgressSheet> createState() => _DownloadProgressSheetState();

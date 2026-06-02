@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -41,12 +42,22 @@ void main() async {
     );
   };
 
-  await NotificationService().init();
+  if (Platform.isAndroid) {
+    try {
+      await NotificationService().init();
+    } catch (e) {
+      debugPrint('Failed to init notifications: $e');
+    }
 
-  await Workmanager().initialize(
-    backupCallbackDispatcher,
-    isInDebugMode: false,
-  );
+    try {
+      await Workmanager().initialize(
+        backupCallbackDispatcher,
+        isInDebugMode: false,
+      );
+    } catch (e) {
+      debugPrint('Failed to init workmanager: $e');
+    }
+  }
 
   final prefs = await SharedPreferences.getInstance();
   final savedUrl = prefs.getString('backup_api_url');
@@ -56,7 +67,7 @@ void main() async {
 
 class _AppWrapper extends StatelessWidget {
   final String? savedApiUrl;
-  const _AppWrapper({this.savedApiUrl});
+  const _AppWrapper({super.key, this.savedApiUrl});
 
   @override
   Widget build(BuildContext context) {

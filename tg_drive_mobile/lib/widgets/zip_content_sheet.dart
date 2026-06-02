@@ -22,7 +22,7 @@ String formatFileSize(int bytes) {
 class ZipContentSheet extends StatelessWidget {
   final String zipFileName;
   final List<ZipEntry> entries;
-  const ZipContentSheet({required this.zipFileName, required this.entries});
+  const ZipContentSheet({super.key, required this.zipFileName, required this.entries});
 
   @override
   Widget build(BuildContext context) {

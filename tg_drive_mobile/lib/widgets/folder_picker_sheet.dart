@@ -5,7 +5,7 @@ import '../theme/app_theme.dart';
 
 class FolderPickerSheet extends StatelessWidget {
   final List<DriveFolder> folders;
-  const FolderPickerSheet({required this.folders});
+  const FolderPickerSheet({super.key, required this.folders});
 
   @override
   Widget build(BuildContext context) {
