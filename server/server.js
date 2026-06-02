@@ -816,10 +816,11 @@ async function findOrCreateBackupChannel(c, folderName) {
   return { id: String(chat.id), accessHash: String(chat.accessHash || ''), created: true };
 }
 
-app.post('/backup/upload-batch', async (req, res) => {
+app.post('/backup/upload-stream', upload.array('files', 5), async (req, res) => {
   try {
-    const { files, folderName } = req.body;
-    if (!files || !files.length || !folderName) {
+    const { folderName } = req.body;
+    const uploadedFiles = req.files;
+    if (!uploadedFiles || !uploadedFiles.length || !folderName) {
       return res.status(400).json({ error: 'files[] and folderName required' });
     }
 
@@ -831,45 +832,38 @@ app.post('/backup/upload-batch', async (req, res) => {
     });
 
     const batchId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    const progress = files.map(f => ({
-      fileName: f.fileName || 'unnamed',
+    const progress = uploadedFiles.map(f => ({
+      fileName: f.originalname || 'unnamed',
       status: 'queued',
       progress: 0,
     }));
     uploadProgress.set(batchId, { files: progress, completed: false, channel });
 
-    res.json({ ok: true, batchId, channel, files: progress });
+    res.json({ ok: true, batchId, files: progress });
 
     const results = [];
-    for (let i = 0; i < files.length; i += 3) {
-      const chunk = files.slice(i, i + 3);
-      await Promise.all(chunk.map(async (file, idx) => {
-        const globalIdx = files.indexOf(file);
-        try {
-          const buf = Buffer.from(file.data, 'base64');
-          const tmpPath = path.join(UPLOAD_DIR, `backup_${Date.now()}_${file.fileName || globalIdx}`);
-          fs.writeFileSync(tmpPath, buf);
-
-          progress[globalIdx].status = 'uploading';
-          await c.sendFile(peer, {
-            file: tmpPath,
-            forceDocument: true,
-            workers: 1,
-            progressCallback: (current, total) => {
-              progress[globalIdx].progress = total > 0 ? current / total : 0;
-            },
-          });
-          progress[globalIdx].status = 'done';
-          progress[globalIdx].progress = 1;
-          results.push({ fileName: file.fileName, status: 'done' });
-          try { fs.unlinkSync(tmpPath); } catch (_) {}
-        } catch (e) {
-          progress[globalIdx].status = 'failed';
-          progress[globalIdx].error = e.message;
-          results.push({ fileName: file.fileName, status: 'failed', error: e.message });
-        }
-      }));
-    }
+    await Promise.all(uploadedFiles.map(async (file, idx) => {
+      const filePath = path.resolve(file.path);
+      try {
+        progress[idx].status = 'uploading';
+        await c.sendFile(peer, {
+          file: filePath,
+          forceDocument: true,
+          workers: 1,
+          progressCallback: (current, total) => {
+            progress[idx].progress = total > 0 ? current / total : 0;
+          },
+        });
+        progress[idx].status = 'done';
+        progress[idx].progress = 1;
+        results.push({ fileName: file.originalname, status: 'done' });
+      } catch (e) {
+        progress[idx].status = 'failed';
+        progress[idx].error = e.message;
+        results.push({ fileName: file.originalname, status: 'failed', error: e.message });
+      }
+      try { fs.unlinkSync(filePath); } catch (_) {}
+    }));
 
     progress.forEach(p => {
       if (p.status === 'queued' || p.status === 'uploading') {

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -113,9 +114,10 @@ void backupCallbackDispatcher() {
           continue;
         }
 
-        const int maxBatch = 50;
+        const int maxBatch = 5;
         final batch = newAssets.take(maxBatch).toList();
-        final batchFiles = <Map<String, String>>[];
+        final batchFiles = <File>[];
+        final batchFileNames = <String>[];
         int totalBytes = 0;
 
         for (int i = 0; i < batch.length; i++) {
@@ -131,17 +133,10 @@ void backupCallbackDispatcher() {
             final file = await asset.file;
             if (file == null) continue;
 
-            final bytes = await file.readAsBytes();
-
-            if (bytes.length > 200 * 1024 * 1024) {
-              continue;
-            }
-
-            totalBytes += bytes.length;
-            batchFiles.add({
-              'fileName': asset.title ?? 'unknown',
-              'data': base64Encode(bytes),
-            });
+            final size = await file.length();
+            totalBytes += size;
+            batchFiles.add(file);
+            batchFileNames.add(asset.title ?? 'unknown');
           } catch (e) {
             debugPrint('BackupWorker: failed to read asset: $e');
           }
@@ -150,24 +145,20 @@ void backupCallbackDispatcher() {
         if (batchFiles.isEmpty) continue;
 
         try {
-          final uri = Uri.parse('$apiBaseUrl/backup/upload-batch');
-          final body = jsonEncode({
-            'folderName': folderName,
-            'files': batchFiles,
-          });
-
-          final headers = <String, String>{
-            'Content-Type': 'application/json',
-          };
-          if (session != null && session.isNotEmpty) {
-            headers['Authorization'] = 'Session $session';
+          final uri = Uri.parse('$apiBaseUrl/backup/upload-stream');
+          final req = http.MultipartRequest('POST', uri);
+          req.fields['folderName'] = folderName;
+          for (int i = 0; i < batchFiles.length; i++) {
+            req.files.add(await http.MultipartFile(
+              'files',
+              batchFiles[i].openRead(),
+              await batchFiles[i].length(),
+              filename: batchFileNames[i],
+            ));
           }
 
-          final response = await http.post(
-            uri,
-            headers: headers,
-            body: body,
-          );
+          final streamed = await req.send().timeout(const Duration(minutes: 10));
+          final response = await http.Response.fromStream(streamed);
 
           if (response.statusCode == 200) {
             final updatedTimestamps =

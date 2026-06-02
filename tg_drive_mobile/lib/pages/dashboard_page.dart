@@ -169,11 +169,11 @@ class _DashboardPageState extends State<DashboardPage>
     final destPath = '${dir.path}/${file.name}';
     if (file.path != null && !file.path!.startsWith('content://')) {
       await File(file.path!).copy(destPath);
+    } else if (file.path != null) {
+      final src = File(file.path!);
+      await src.copy(destPath);
     } else if (file.bytes != null) {
       await File(destPath).writeAsBytes(file.bytes!);
-    } else if (file.path != null) {
-      final fileBytes = await File(file.path!).readAsBytes();
-      await File(destPath).writeAsBytes(fileBytes);
     } else {
       throw Exception('Cannot access file: ${file.name}');
     }
@@ -181,7 +181,7 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   Future<void> _pickAndUpload(FileService fs) async {
-    final result = await FilePicker.platform.pickFiles(allowMultiple: true, withData: true);
+    final result = await FilePicker.platform.pickFiles(allowMultiple: true);
     if (result == null || result.files.isEmpty) return;
     final folder = fs.activeFolder ?? fs.folders.first;
     if (folder.chatId == null) return;

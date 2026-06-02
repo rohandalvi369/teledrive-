@@ -219,17 +219,42 @@ class ApiService {
   }
 
 
-  Future<Map<String, dynamic>> backupUploadBatch(
+  Future<Map<String, dynamic>> backupUploadStream(
     String folderName,
-    List<Map<String, String>> files,
+    List<String> fileNames,
+    List<File> files,
   ) async {
-    final data = await _post(
-      '/backup/upload-batch',
-      {'folderName': folderName, 'files': files},
-      timeout: const Duration(seconds: 120),
-      markUnreachable: false,
-    );
-    return data;
+    assert(fileNames.length == files.length);
+    final uri = Uri.parse('$baseUrl/backup/upload-stream');
+    final req = http.MultipartRequest('POST', uri);
+    req.fields['folderName'] = folderName;
+    for (int i = 0; i < files.length; i++) {
+      final f = files[i];
+      req.files.add(http.MultipartFile(
+        'files',
+        f.openRead(),
+        await f.length(),
+        filename: fileNames[i],
+      ));
+    }
+    try {
+      serverReachable = true;
+      final streamed = await _client.send(req).timeout(
+        const Duration(minutes: 10),
+      );
+      final resp = await http.Response.fromStream(streamed);
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      if (resp.statusCode != 200) {
+        throw Exception(data['error'] ?? 'Upload failed');
+      }
+      return data;
+    } on SocketException {
+      rethrow;
+    } on TimeoutException {
+      rethrow;
+    } on HttpException {
+      rethrow;
+    }
   }
 
   Future<Map<String, dynamic>> getBackupProgress(String batchId) =>

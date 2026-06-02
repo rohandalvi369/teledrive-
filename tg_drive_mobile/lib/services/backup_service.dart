@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -82,7 +83,6 @@ class BackupService extends ChangeNotifier {
   bool _backingUp = false;
 
   static const int _maxBatchFiles = 5;
-  static const int _maxFileBytes = 50 * 1024 * 1024;
 
   BackupService(this._api);
 
@@ -324,15 +324,15 @@ class BackupService extends ChangeNotifier {
           continue;
         }
 
-        final allBatchFiles = <Map<String, String>>[];
+        final batchFiles = <File>[];
+        final batchFileNames = <String>[];
         int totalBytes = 0;
-        int skippedLarge = 0;
 
         for (int i = 0; i < newAssets.length; i++) {
           final asset = newAssets[i];
           _progress = BackupProgress(
             folderName: folder.name,
-            completedFiles: i - skippedLarge,
+            completedFiles: i,
             totalFiles: newAssets.length,
             currentFile: 'Preparing file ${i + 1}/${newAssets.length}...',
             totalBytes: totalBytes,
@@ -343,38 +343,33 @@ class BackupService extends ChangeNotifier {
           final file = await asset.file;
           if (file == null) continue;
 
-          final bytes = await file.readAsBytes();
-          if (bytes.length > _maxFileBytes) {
-            skippedLarge++;
-            continue;
-          }
-          totalBytes += bytes.length;
-          allBatchFiles.add({
-            'fileName': asset.title ?? 'unknown',
-            'data': base64Encode(bytes),
-          });
+          final size = await file.length();
+          totalBytes += size;
+          batchFiles.add(file);
+          batchFileNames.add(asset.title ?? 'unknown');
         }
 
-        if (allBatchFiles.isEmpty) continue;
+        if (batchFiles.isEmpty) continue;
 
         int uploaded = 0;
-        for (int i = 0; i < allBatchFiles.length; i += _maxBatchFiles) {
-          final end = (i + _maxBatchFiles).clamp(0, allBatchFiles.length);
-          final chunk = allBatchFiles.sublist(i, end);
+        for (int i = 0; i < batchFiles.length; i += _maxBatchFiles) {
+          final end = (i + _maxBatchFiles).clamp(0, batchFiles.length);
+          final namesChunk = batchFileNames.sublist(i, end);
+          final filesChunk = batchFiles.sublist(i, end);
 
           _progress = BackupProgress(
             folderName: folder.name,
             completedFiles: uploaded,
-            totalFiles: allBatchFiles.length,
+            totalFiles: batchFiles.length,
             currentFile:
-                'Uploading batch ${i ~/ _maxBatchFiles + 1}/${(allBatchFiles.length + _maxBatchFiles - 1) ~/ _maxBatchFiles}...',
+                'Uploading batch ${i ~/ _maxBatchFiles + 1}/${(batchFiles.length + _maxBatchFiles - 1) ~/ _maxBatchFiles}...',
             totalBytes: totalBytes,
             uploadedBytes: 0,
           );
           notifyListeners();
 
-          await _api.backupUploadBatch(folder.name, chunk);
-          uploaded += chunk.length;
+          await _api.backupUploadStream(folder.name, namesChunk, filesChunk);
+          uploaded += filesChunk.length;
         }
 
         final timestamps =
@@ -401,7 +396,7 @@ class BackupService extends ChangeNotifier {
         _progress = BackupProgress(
           folderName: folder.name,
           completedFiles: uploaded,
-          totalFiles: allBatchFiles.length,
+          totalFiles: batchFiles.length,
           done: true,
         );
         notifyListeners();

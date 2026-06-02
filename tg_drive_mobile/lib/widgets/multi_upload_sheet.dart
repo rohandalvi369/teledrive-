@@ -34,8 +34,7 @@ class _MultiUploadSheetState extends State<MultiUploadSheet> {
         if (file.bytes != null) {
           await File(destPath).writeAsBytes(file.bytes!);
         } else if (file.path != null) {
-          final bytes = await File(file.path!).readAsBytes();
-          await File(destPath).writeAsBytes(bytes);
+          await File(file.path!).copy(destPath);
         } else {
           setState(() => _failed++);
           continue;
