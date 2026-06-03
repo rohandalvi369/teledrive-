@@ -196,6 +196,10 @@ class TelegramService extends ChangeNotifier {
     _tdlib?.sendRaw(request);
   }
 
+  void sendRaw(Map<String, dynamic> request) {
+    _sendJson(request);
+  }
+
   Future<Map<String, dynamic>> sendMessageAndWait(
     int chatId,
     InputMessageContent content,

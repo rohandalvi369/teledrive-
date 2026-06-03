@@ -1,6 +1,7 @@
-import 'dart:io' show Platform;
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
@@ -62,7 +63,29 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final savedUrl = prefs.getString('backup_api_url');
 
+  try { await _cleanupCaches(); } catch (_) {}
+
   runApp(_AppWrapper(savedApiUrl: savedUrl));
+}
+
+Future<void> _cleanupCaches() async {
+  final cacheDir = Directory('${(await getTemporaryDirectory()).path}/tg_cache');
+  if (await cacheDir.exists()) {
+    await cacheDir.delete(recursive: true);
+  }
+
+  final tdlibFiles = Directory('${(await getApplicationDocumentsDirectory()).path}/tdlib/files');
+  if (await tdlibFiles.exists()) {
+    await for (final entry in tdlibFiles.list()) {
+      try {
+        if (entry is Directory) {
+          await entry.delete(recursive: true);
+        } else {
+          await entry.delete();
+        }
+      } catch (_) {}
+    }
+  }
 }
 
 class _AppWrapper extends StatelessWidget {

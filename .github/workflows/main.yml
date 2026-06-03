@@ -42,6 +42,11 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Create .env from secrets
+        run: |
+          echo "VITE_API_ID=${{ secrets.API_ID }}" > .env
+          echo "VITE_API_HASH=${{ secrets.API_HASH }}" >> .env
+
       - name: Build frontend (tsc + vite)
         run: npm run build
 

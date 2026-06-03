@@ -4,6 +4,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:open_filex/open_filex.dart';
@@ -69,6 +70,7 @@ class _DashboardPageState extends State<DashboardPage>
       fs.fetchFolders();
       _loadStats();
       _loadRecents();
+      fs.optimizeStorage();
     });
   }
 
@@ -227,6 +229,20 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
 
+  Future<void> _cacheForPreview(FileService fs, DriveFile file) async {
+    final src = file.localPath;
+    if (src == null || src.isEmpty) return;
+    final cacheDir = Directory('${(await getTemporaryDirectory()).path}/tg_cache');
+    await cacheDir.create(recursive: true);
+    final dest = '${cacheDir.path}/${file.messageId}_${file.fileName}';
+    if (src != dest) {
+      await File(src).copy(dest);
+      fs.deleteTdlibFile(file.fileId);
+      try { await File(src).delete(); } catch (_) {}
+      file.localPath = dest;
+    }
+  }
+
   Future<void> _downloadAndPreview(
     BuildContext ctx, FileService fs, DriveFile file, {
     List<DriveFile>? imageList, int imageIndex = 0,
@@ -238,6 +254,7 @@ class _DashboardPageState extends State<DashboardPage>
           builder: (_) => DownloadProgressSheet(fs: fs, file: file),
         );
         if (path == null || !mounted) return;
+        await _cacheForPreview(fs, file);
       }
       if (!mounted) return;
       Navigator.push(ctx,
@@ -245,12 +262,15 @@ class _DashboardPageState extends State<DashboardPage>
       );
       return;
     }
-    if (file.isDownloaded) { _openFile(ctx, file); return; }
+    if (file.isDownloaded) { await _cacheForPreview(fs, file); _openFile(ctx, file); return; }
     final path = await showModalBottomSheet<String>(
       context: ctx, enableDrag: false, isDismissible: false,
       builder: (_) => DownloadProgressSheet(fs: fs, file: file),
     );
-    if (path != null && mounted) { file.localPath = path; _openFile(ctx, file); }
+    if (path != null && mounted) {
+      await _cacheForPreview(fs, file);
+      _openFile(ctx, file);
+    }
   }
 
   void _openFile(BuildContext ctx, DriveFile file) {
@@ -298,19 +318,14 @@ class _DashboardPageState extends State<DashboardPage>
     final files = _selectedFiles.toList();
     _exitMultiSelect();
     try {
-      final ts = context.read<TrashService>();
       final chatId = fs.activeFolder?.chatId;
       if (chatId != null) {
-        await ts.moveToTrash(files, chatId.toString(), '');
+        final ids = files.map((f) => f.messageId).toList();
+        await fs.deleteMessagesByIds(chatId, ids);
       }
-    } catch (e) {
-      debugPrint('Trash API failed (expected without accessHash): $e');
-    }
-    try {
-      await fs.deleteMessages(files);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${files.length} file(s) moved to trash')),
+          SnackBar(content: Text('${files.length} file(s) deleted')),
         );
       }
     } catch (e) {

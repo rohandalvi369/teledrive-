@@ -839,8 +839,6 @@ app.post('/backup/upload-stream', upload.array('files', 5), async (req, res) => 
     }));
     uploadProgress.set(batchId, { files: progress, completed: false, channel });
 
-    res.json({ ok: true, batchId, files: progress });
-
     const results = [];
     await Promise.all(uploadedFiles.map(async (file, idx) => {
       const filePath = path.resolve(file.path);
@@ -880,6 +878,9 @@ app.post('/backup/upload-stream', upload.array('files', 5), async (req, res) => 
       }
     });
     uploadProgress.set(batchId, { files: progress, completed: true, results, channel });
+
+    const failedCount = results.filter(r => r.status === 'failed').length;
+    res.json({ ok: true, batchId, results, total: results.length, failed: failedCount });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }

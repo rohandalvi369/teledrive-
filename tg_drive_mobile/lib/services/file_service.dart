@@ -353,17 +353,20 @@ class FileService extends ChangeNotifier {
   Future<void> deleteMessages(List<DriveFile> files, {int? chatId}) async {
     final cid = chatId ?? _activeFolder?.chatId;
     if (cid == null) return;
-    try {
-      final ids = files.map((f) => f.messageId).toList();
-      await _telegram.execute(DeleteMessages(
-        chatId: cid,
-        messageIds: ids,
-        revoke: true,
-      ));
-    } catch (e) {
-      _error = e.toString();
-      notifyListeners();
-    }
+    final ids = files.map((f) => f.messageId).toList();
+    await _telegram.execute(DeleteMessages(
+      chatId: cid,
+      messageIds: ids,
+      revoke: true,
+    ));
+  }
+
+  Future<void> deleteMessagesByIds(int chatId, List<int> messageIds) async {
+    await _telegram.execute(DeleteMessages(
+      chatId: chatId,
+      messageIds: messageIds,
+      revoke: true,
+    ));
   }
 
   Future<void> forwardMessage(DriveFile file, DriveFolder targetFolder) async {
@@ -476,5 +479,20 @@ class FileService extends ChangeNotifier {
       _loading = false;
       notifyListeners();
     }
+  }
+
+  void deleteTdlibFile(int fileId) {
+    _telegram.sendRaw({'@type': 'deleteFile', 'file_id': fileId});
+  }
+
+  void optimizeStorage() {
+    _telegram.sendRaw({
+      '@type': 'optimizeStorage',
+      'size': 0,
+      'chat_ids': [],
+      'exclude_chat_ids': [],
+      'return_deleted_file_statistics': true,
+      'chat_limit': 0,
+    });
   }
 }
