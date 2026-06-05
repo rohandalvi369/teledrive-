@@ -743,6 +743,12 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
     const dirToFolderMap = new Map<string, string>()
     dirToFolderMap.set('', folder.id)
 
+    const localFolderMap = new Map<string, DriveFolder>()
+    for (const f of foldersRef.current) {
+      localFolderMap.set(f.id, f)
+    }
+    localFolderMap.set(folder.id, folder)
+
     const dirsToEnsure = new Set<string>()
     for (const entry of entries) {
       const relPath = entry.relativePath
@@ -762,7 +768,7 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
           parentId = dirToFolderMap.get(pathSoFar)!
           continue
         }
-        const existing = foldersRef.current.find(
+        const existing = Array.from(localFolderMap.values()).find(
           f => f.parentId === parentId && f.title === parts[i] && f.type === 'channel'
         )
         if (existing) {
@@ -773,6 +779,7 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
             const newFolder = await createChannel(parts[i], parentId)
             dirToFolderMap.set(pathSoFar, newFolder.id)
             parentId = newFolder.id
+            localFolderMap.set(newFolder.id, newFolder)
             setFolders(prev => [...prev, newFolder])
           } catch {
             break
@@ -804,7 +811,7 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
       if (targetId === folder.id) {
         targetFolder = folder
       } else {
-        targetFolder = foldersRef.current.find(f => f.id === targetId) || folder
+        targetFolder = localFolderMap.get(targetId) || folder
       }
 
       try {
