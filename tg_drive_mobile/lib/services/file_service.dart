@@ -399,17 +399,10 @@ class FileService extends ChangeNotifier {
           title: title,
           isForum: false,
           isChannel: true,
-          description: '',
+          description: 'tg-drive-folder',
           location: null,
           messageAutoDeleteTime: 0,
           forImport: false,
-        ),
-      );
-      final chat = Chat.fromJson(resp);
-      await _telegram.execute(
-        SetChatDescription(
-          chatId: chat.id,
-          description: 'tg-drive-folder',
         ),
       );
 

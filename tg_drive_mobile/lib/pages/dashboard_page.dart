@@ -867,7 +867,14 @@ class _DashboardPageState extends State<DashboardPage>
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: GoogleFonts.inter(color: AppColors.textSecondary))),
-        FilledButton(onPressed: () { if (ctrl.text.trim().isNotEmpty) { fs.createFolder(ctrl.text.trim()); Navigator.pop(ctx); } }, child: const Text('Create')),
+        FilledButton(onPressed: () async {
+          if (ctrl.text.trim().isEmpty) return;
+          Navigator.pop(ctx);
+          await fs.createFolder(ctrl.text.trim());
+          if (context.mounted && fs.error != null) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to create folder: ${fs.error}')));
+          }
+        }, child: const Text('Create')),
       ],
     ));
   }

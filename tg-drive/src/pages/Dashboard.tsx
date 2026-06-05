@@ -491,9 +491,9 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
       setFolders((prev) => [...prev, channel])
       setActiveFolder(channel)
     } catch (err: any) {
-      alert('Failed to create folder: ' + (err.message || 'Unknown error'))
+      addToast(`Failed to create folder: ${err.message || 'Unknown error'}`, 'error')
     }
-  }, [])
+  }, [addToast])
 
   const handleRenameFolder = useCallback(async (folder: DriveFolder, newTitle: string) => {
     try {
