@@ -82,7 +82,7 @@ class FileService extends ChangeNotifier {
               );
               final fullInfo =
                   SupergroupFullInfo.fromJson(fullInfoResp);
-              if (fullInfo.description == 'tg-drive-folder') {
+              if (fullInfo.description.startsWith('tg-drive-folder')) {
                 folders.add(DriveFolder(
                   id: chatId.toString(),
                   title: chat.title,
