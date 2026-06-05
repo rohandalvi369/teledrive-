@@ -500,9 +500,10 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
       await renameChannel(folder, newTitle)
       await refreshFolders()
     } catch (err: any) {
+      addToast(`Failed to rename folder: ${err.message || 'Unknown error'}`, 'error')
       console.error('Failed to rename folder:', err)
     }
-  }, [refreshFolders])
+  }, [refreshFolders, addToast])
 
   const handleDeleteFolder = useCallback(async (folder: DriveFolder) => {
     try {
@@ -512,9 +513,10 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
         setActiveFolder(folders.find((f) => f.type === 'saved') || { id: 'saved', title: 'Saved Messages', type: 'saved' })
       }
     } catch (err: any) {
+      addToast(`Failed to delete folder: ${err.message || 'Unknown error'}`, 'error')
       console.error('Failed to delete folder:', err)
     }
-  }, [refreshFolders, activeFolder, folders])
+  }, [refreshFolders, activeFolder, folders, addToast])
 
   const handleDownloadProgress = useCallback((messageId: number, pct: number) => {
     setDownloadProgress((prev) => ({ ...prev, [messageId]: pct }))
