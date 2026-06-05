@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import bigInt from 'big-integer'
 import { clearSession, fetchSavedFiles, fetchChannelFiles, fetchFolders, uploadFileToFolder, createChannel, renameChannel, deleteChannel, forwardMessages, deleteMessages, getTrashFolder, createTrashFolder, getCachedFolders, clearFolderCache, TAG_TRASH, downloadMediaBuffer, getSession } from '@/lib/telegram'
-import type { DriveFile, DriveFolder } from '@/lib/telegram'
+import type { DriveFile, DriveFolder, FolderUploadEntry } from '@/lib/telegram'
 import { useTheme } from '@/hooks/useTheme'
 import { filterByCategory } from '@/lib/fileTypes'
 import type { FileCategory } from '@/lib/fileTypes'
@@ -15,6 +15,7 @@ import SettingsModal from '@/components/SettingsModal'
 import BackupBanner from '@/components/BackupBanner'
 import SortDropdown from '@/components/SortDropdown'
 import MultiSelectBar from '@/components/MultiSelectBar'
+import FolderPicker from '@/components/FolderPicker'
 import { getBackupFolders, addBackupFolder, removeBackupFolder, getBackupDestFolder, setBackupDestFolder as saveBackupDestFolder, pickBackupFolder, runBackup, isTauri } from '@/lib/backup'
 import type { BackupJob } from '@/lib/backup'
 
@@ -54,6 +55,8 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
   const multiSelectRef = useRef(multiSelect)
   const selectedIdsRef = useRef(selectedIds)
   const draggedFileIdsRef = useRef<number[]>([])
+  const [showMovePicker, setShowMovePicker] = useState(false)
+  const foldersRef = useRef(folders)
   const [toasts, setToasts] = useState<{id: number; message: string; type: 'success' | 'error'}[]>([])
   const toastIdRef = useRef(0)
   const [showSettings, setShowSettings] = useState(false)
@@ -112,6 +115,7 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
   useEffect(() => { activeFolderRef.current = activeFolder }, [activeFolder])
   useEffect(() => { multiSelectRef.current = multiSelect }, [multiSelect])
   useEffect(() => { selectedIdsRef.current = selectedIds }, [selectedIds])
+  useEffect(() => { foldersRef.current = folders }, [folders])
 
   const loadFiles = useCallback(async (folder: DriveFolder) => {
     setLoading(true)
@@ -481,9 +485,9 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
     loadFiles(folder)
   }, [loadFiles])
 
-  const handleNewFolder = useCallback(async (title: string) => {
+  const handleNewFolder = useCallback(async (title: string, parentId?: string) => {
     try {
-      const channel = await createChannel(title)
+      const channel = await createChannel(title, parentId)
       setFolders((prev) => [...prev, channel])
       setActiveFolder(channel)
     } catch (err: any) {
@@ -712,27 +716,120 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
     loadFiles(folder)
   }, [selectedFilesList, handleExitMultiSelect, loadFiles])
 
-  const handleMove = useCallback(async () => {
-    const targetId = prompt('Move to folder ID (saved or channel ID):')
-    if (!targetId) return
+  const handleMoveClick = useCallback(() => {
+    setShowMovePicker(true)
+  }, [])
+
+  const handleMoveToTarget = useCallback(async (target: DriveFolder) => {
+    setShowMovePicker(false)
     try {
-      let target: DriveFolder | undefined
-      if (targetId === 'saved') {
-        target = { id: 'saved', title: 'Saved Messages', type: 'saved' }
-      } else {
-        target = folders.find((f) => f.id === targetId)
-      }
-      if (!target) return
       const ids = selectedFilesList.map((f) => f.messageId)
       await forwardMessages(activeFolder, target, ids)
       await deleteMessages(activeFolder, ids)
-      addToast(`Moved ${ids.length} file${ids.length !== 1 ? 's' : ''}`, 'success')
+      addToast(`Moved ${ids.length} file${ids.length !== 1 ? 's' : ''} to ${target.title}`, 'success')
       handleExitMultiSelect()
       loadFiles(activeFolder)
     } catch (err: any) {
       addToast(`Failed to move files: ${err.message}`, 'error')
     }
-  }, [activeFolder, folders, selectedFilesList, handleExitMultiSelect, loadFiles, addToast])
+  }, [activeFolder, selectedFilesList, handleExitMultiSelect, loadFiles, addToast])
+
+  const handleFolderUpload = useCallback(async (entries: FolderUploadEntry[]) => {
+    if (uploadingRef.current) return
+    const folder = activeFolderRef.current
+    if (!folder) return
+    uploadingRef.current = true
+
+    const dirToFolderMap = new Map<string, string>()
+    dirToFolderMap.set('', folder.id)
+
+    const dirsToEnsure = new Set<string>()
+    for (const entry of entries) {
+      const relPath = entry.relativePath
+      const lastSlash = relPath.lastIndexOf('/')
+      if (lastSlash === -1) continue
+      const dir = relPath.substring(0, lastSlash)
+      dirsToEnsure.add(dir)
+    }
+
+    for (const dir of dirsToEnsure) {
+      if (dirToFolderMap.has(dir)) continue
+      const parts = dir.split('/')
+      let parentId = folder.id
+      for (let i = 0; i < parts.length; i++) {
+        const pathSoFar = parts.slice(0, i + 1).join('/')
+        if (dirToFolderMap.has(pathSoFar)) {
+          parentId = dirToFolderMap.get(pathSoFar)!
+          continue
+        }
+        const existing = foldersRef.current.find(
+          f => f.parentId === parentId && f.title === parts[i] && f.type === 'channel'
+        )
+        if (existing) {
+          dirToFolderMap.set(pathSoFar, existing.id)
+          parentId = existing.id
+        } else {
+          try {
+            const newFolder = await createChannel(parts[i], parentId)
+            dirToFolderMap.set(pathSoFar, newFolder.id)
+            parentId = newFolder.id
+            setFolders(prev => [...prev, newFolder])
+          } catch {
+            break
+          }
+        }
+      }
+    }
+
+    const controller = new AbortController()
+    const uploadJobs: UploadJob[] = entries.map((entry) => ({
+      id: String(++uploadIdCounter),
+      name: entry.relativePath,
+      size: entry.file.size,
+      progress: 0,
+      status: 'uploading' as const,
+      abort: controller,
+    }))
+    setUploads(prev => [...prev, ...uploadJobs])
+
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i]
+      const job = uploadJobs[i]
+      const relPath = entry.relativePath
+      const lastSlash = relPath.lastIndexOf('/')
+      const dir = lastSlash === -1 ? '' : relPath.substring(0, lastSlash)
+      const targetId = dirToFolderMap.get(dir) || folder.id
+
+      let targetFolder: DriveFolder
+      if (targetId === folder.id) {
+        targetFolder = folder
+      } else {
+        targetFolder = foldersRef.current.find(f => f.id === targetId) || folder
+      }
+
+      try {
+        await uploadFileToFolder(targetFolder, entry.file, (pct: number) => {
+          setUploads(prev =>
+            prev.map(u => u.id === job.id ? { ...u, progress: Math.max(u.progress, Math.round(pct * 100)) } : u)
+          )
+        }, controller.signal)
+        setUploads(prev =>
+          prev.map(u => u.id === job.id ? { ...u, progress: 100, status: 'done', abort: undefined } : u)
+        )
+      } catch (err: any) {
+        setUploads(prev =>
+          prev.map(u => u.id === job.id
+            ? { ...u, status: 'error', error: err.message === 'Upload cancelled' ? 'Cancelled' : (err.message || 'Upload failed'), abort: undefined }
+            : u
+          )
+        )
+      }
+    }
+
+    uploadingRef.current = false
+    loadFiles(folder)
+    refreshFolders()
+  }, [loadFiles, refreshFolders])
 
   const fileCount = filteredFiles.length
   const selectedCount = selectedIds.size
@@ -769,7 +866,7 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
         </div>
 
         <div className="flex items-center gap-2">
-          <UploadZone onUploadFiles={handleFilesSelected} uploading={uploadingRef.current} folderName={activeFolder.title} />
+          <UploadZone onUploadFiles={handleFilesSelected} onUploadFolder={handleFolderUpload} uploading={uploadingRef.current} folderName={activeFolder.title} />
           <div className="h-5 w-px" style={{ background: 'var(--color-border)' }} />
           <span className="text-xs truncate max-w-28 hidden sm:block" style={{ color: 'var(--color-text-tertiary)' }}>{activeFolder.title}</span>
           <button
@@ -837,7 +934,7 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
           handlePurgeTrash()
         }}
         onCreateZip={handleCreateZip}
-        onMove={handleMove}
+        onMove={handleMoveClick}
         onMoveToTrash={handleMoveToTrash}
         onExitMultiSelect={handleExitMultiSelect}
         filesLength={files.length}
@@ -965,6 +1062,15 @@ export default function Dashboard({ onLogout, onShowPrivacy }: Props) {
       </div>
 
       <UploadProgress uploads={uploads} />
+
+      {showMovePicker && (
+        <FolderPicker
+          folders={folders}
+          currentFolderId={activeFolder.id}
+          onSelect={handleMoveToTarget}
+          onClose={() => setShowMovePicker(false)}
+        />
+      )}
 
       {showSettings && (
         <SettingsModal

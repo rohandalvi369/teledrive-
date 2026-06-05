@@ -99,6 +99,12 @@ export interface DriveFolder {
   channelId?: string
   accessHash?: string
   about?: string
+  parentId?: string
+}
+
+export interface FolderUploadEntry {
+  file: File
+  relativePath: string
 }
 
 function extractFileInfo(msg: any): DriveFile | null {
@@ -178,6 +184,20 @@ function isSpecialTag(about: string | undefined): boolean {
   return about === TAG_TRASH
 }
 
+function parseFolderAbout(about: string | undefined): { parentId?: string } {
+  if (!about || !about.startsWith(TAG_FOLDER)) return {}
+  const pipeIdx = about.indexOf('|')
+  if (pipeIdx === -1) return {}
+  const params = about.slice(pipeIdx + 1)
+  const pairs = params.split('|')
+  const result: { parentId?: string } = {}
+  for (const pair of pairs) {
+    const [key, value] = pair.split('=')
+    if (key === 'parent') result.parentId = value
+  }
+  return result
+}
+
 export async function fetchFolders(): Promise<DriveFolder[]> {
   const { client } = await getConnectedClient()
   const dialogs = await client.getDialogs({ limit: 100 })
@@ -192,7 +212,8 @@ export async function fetchFolders(): Promise<DriveFolder[]> {
       if (!isPrivate) continue
       const about: string | undefined = channel.about
 
-      if (about === TAG_FOLDER && !isSpecialTag(about)) {
+      if (about?.startsWith(TAG_FOLDER) && !isSpecialTag(about)) {
+        const parsed = parseFolderAbout(about)
         folders.push({
           id: String(channel.id),
           title: dialog.title || 'Unnamed Channel',
@@ -201,6 +222,7 @@ export async function fetchFolders(): Promise<DriveFolder[]> {
           channelId: String(channel.id),
           accessHash: String(channel.accessHash),
           about,
+          parentId: parsed.parentId,
         })
       } else if (about === TAG_TRASH && !_trashFolder) {
         _trashFolder = {
@@ -235,7 +257,8 @@ export async function fetchFolders(): Promise<DriveFolder[]> {
       if (!info || !info.about) continue
       const { dialog, channel, about } = info
 
-      if (about === TAG_FOLDER && !isSpecialTag(about)) {
+      if (about?.startsWith(TAG_FOLDER) && !isSpecialTag(about)) {
+        const parsed = parseFolderAbout(about)
         folders.push({
           id: String(channel.id),
           title: dialog.title || 'Unnamed Channel',
@@ -244,6 +267,7 @@ export async function fetchFolders(): Promise<DriveFolder[]> {
           channelId: String(channel.id),
           accessHash: String(channel.accessHash),
           about,
+          parentId: parsed.parentId,
         })
       } else if (about === TAG_TRASH && !_trashFolder) {
         _trashFolder = {
@@ -437,7 +461,7 @@ export async function getMessageAuthor(folder: DriveFolder, messageId: number): 
   }
 }
 
-export async function createChannel(title: string): Promise<DriveFolder> {
+export async function createChannel(title: string, parentId?: string): Promise<DriveFolder> {
   const { client } = await getConnectedClient()
   const result = await client.invoke(
     new Api.channels.CreateChannel({
@@ -458,9 +482,10 @@ export async function createChannel(title: string): Promise<DriveFolder> {
     channelId: bigInt(channelId),
     accessHash: bigInt(accessHash),
   })
+  const about = parentId ? `${TAG_FOLDER}|parent=${parentId}` : TAG_FOLDER
   await client.invoke(new Api.messages.EditChatAbout({
     peer,
-    about: TAG_FOLDER,
+    about,
   }))
   return {
     id: channelId,
@@ -468,7 +493,8 @@ export async function createChannel(title: string): Promise<DriveFolder> {
     type: 'channel',
     channelId,
     accessHash,
-    about: TAG_FOLDER,
+    about,
+    parentId,
   }
 }
 

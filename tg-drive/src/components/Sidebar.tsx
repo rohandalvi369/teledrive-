@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import type { DriveFolder } from '@/lib/telegram'
 import ContextMenu, { type MenuItem } from './ContextMenu'
 
@@ -8,7 +8,7 @@ interface Props {
   onSelect: (folder: DriveFolder) => void
   collapsed: boolean
   onToggle: () => void
-  onNewFolder: (title: string) => Promise<void>
+  onNewFolder: (title: string, parentId?: string) => Promise<void>
   onRenameFolder: (folder: DriveFolder, newTitle: string) => Promise<void>
   onDeleteFolder: (folder: DriveFolder) => Promise<void>
   onTrashClick: () => void
@@ -21,15 +21,44 @@ interface Props {
 
 export default function Sidebar({ folders, activeId, onSelect, collapsed, onToggle, onNewFolder, onRenameFolder, onDeleteFolder, onTrashClick, onRecentsClick, onFileDrop, onTrashDrop, onShowPrivacy, onFolderDragHover }: Props) {
   const [creating, setCreating] = useState(false)
+  const [creatingParentId, setCreatingParentId] = useState<string | undefined>(undefined)
   const [newTitle, setNewTitle] = useState('')
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; folder: DriveFolder } | null>(null)
   const [renaming, setRenaming] = useState<DriveFolder | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [dragOverTrash, setDragOverTrash] = useState(false)
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const inputRef = useRef<HTMLInputElement>(null)
   const dragHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dragHoverFolderRef = useRef<DriveFolder | null>(null)
+
+  const { map, roots } = useMemo(() => {
+    const m = new Map<string, { folder: DriveFolder; children: string[] }>()
+    const r: string[] = []
+    for (const f of folders) {
+      if (f.type === 'saved') continue
+      m.set(f.id, { folder: f, children: [] })
+    }
+    for (const f of folders) {
+      if (f.type === 'saved') continue
+      if (f.parentId && m.has(f.parentId)) {
+        m.get(f.parentId)!.children.push(f.id)
+      } else {
+        r.push(f.id)
+      }
+    }
+    return { map: m, roots: r }
+  }, [folders])
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const clearDragHoverTimer = useCallback(() => {
     if (dragHoverTimerRef.current !== null) {
@@ -59,8 +88,9 @@ export default function Sidebar({ folders, activeId, onSelect, collapsed, onTogg
     const title = newTitle.trim()
     if (!title) return
     setCreating(false)
+    setCreatingParentId(undefined)
     setNewTitle('')
-    await onNewFolder(title)
+    await onNewFolder(title, creatingParentId)
   }
 
   const handleContextMenu = useCallback((e: React.MouseEvent, folder: DriveFolder) => {
@@ -83,8 +113,14 @@ export default function Sidebar({ folders, activeId, onSelect, collapsed, onTogg
     setRenameValue('')
   }
 
+  const handleStartNewSubFolder = (folder: DriveFolder) => {
+    setCreatingParentId(folder.id)
+    setCreating(true)
+  }
+
   const ctxItems: MenuItem[] = ctxMenu
     ? [
+        { label: 'New Sub-folder', icon: '📂', onClick: () => handleStartNewSubFolder(ctxMenu.folder) },
         { label: 'Rename', icon: '✏️', onClick: () => handleRenameStart(ctxMenu.folder) },
         { label: 'Delete', icon: '🗑️', danger: true, onClick: () => onDeleteFolder(ctxMenu.folder) },
       ]
@@ -114,6 +150,78 @@ export default function Sidebar({ folders, activeId, onSelect, collapsed, onTogg
       {!collapsed && <span className="truncate text-left flex-1 min-w-0">{label}</span>}
     </button>
   )
+
+  function renderFolderNode(
+    folderId: string,
+    depth: number,
+  ) {
+    const node = map.get(folderId)
+    if (!node) return null
+    const folder = node.folder
+    const isActive = folder.id === activeId
+    const isDragOver = dragOverId === folder.id
+    const hasChildren = node.children.length > 0
+    const isExpanded = expandedIds.has(folder.id)
+    const icon = '📁'
+
+    return (
+      <div key={folder.id}>
+        <button
+          onClick={() => { onSelect(folder); if (hasChildren && !isExpanded) toggleExpand(folder.id) }}
+          onContextMenu={(e) => handleContextMenu(e, folder)}
+          onDragEnter={(e) => { e.preventDefault(); setDragOverId(folder.id); startDragHoverTimer(folder) }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+              setDragOverId(prev => prev === folder.id ? null : prev)
+              clearDragHoverTimer()
+            }
+          }}
+          onDragOver={(e) => {
+            e.preventDefault()
+            e.dataTransfer.dropEffect = e.ctrlKey ? 'copy' : 'move'
+          }}
+          onDrop={(e) => {
+            e.preventDefault()
+            setDragOverId(null)
+            clearDragHoverTimer()
+            onFileDrop?.(folder, e.ctrlKey)
+          }}
+          title={collapsed ? folder.title : undefined}
+          className={`w-full flex items-center gap-1.5 px-3 py-2 text-sm transition-all duration-150 border-l-2 ${
+            collapsed ? 'justify-center px-0' : ''
+          }`}
+          style={{
+            paddingLeft: collapsed ? 0 : `${12 + depth * 16}px`,
+            background: isActive ? 'color-mix(in srgb, var(--color-accent) 10%, transparent)' : isDragOver ? 'color-mix(in srgb, var(--color-accent) 15%, transparent)' : undefined,
+            color: isActive ? 'var(--color-accent)' : isDragOver ? 'var(--color-text)' : 'var(--color-text-tertiary)',
+            borderLeftColor: isActive || isDragOver ? 'var(--color-accent)' : 'transparent',
+          }}
+          onMouseEnter={!isActive && !isDragOver ? (e) => { e.currentTarget.style.color = 'var(--color-text)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--color-accent) 5%, transparent)' } : undefined}
+          onMouseLeave={!isActive && !isDragOver ? (e) => { e.currentTarget.style.color = 'var(--color-text-tertiary)'; e.currentTarget.style.background = '' } : undefined}
+        >
+          {!collapsed && (
+            <span
+              onClick={(e) => { e.stopPropagation(); toggleExpand(folder.id) }}
+              className="w-3.5 flex-shrink-0 text-[10px] leading-none cursor-pointer"
+            >
+              {hasChildren ? (isExpanded ? '▼' : '▶') : ''}
+            </span>
+          )}
+          <span className="flex-shrink-0 text-base leading-none">{icon}</span>
+          {!collapsed && (
+            <span className="truncate text-left flex-1 min-w-0">{folder.title}</span>
+          )}
+          {!collapsed && folder.unreadCount ? (
+            <span className="text-[10px] rounded-full px-1.5 py-0.5 min-w-4 text-center leading-none"
+              style={{ background: 'var(--color-accent)', color: '#fff' }}>
+              {folder.unreadCount > 99 ? '99+' : folder.unreadCount}
+            </span>
+          ) : null}
+        </button>
+        {hasChildren && isExpanded && node.children.map(childId => renderFolderNode(childId, depth + 1))}
+      </div>
+    )
+  }
 
   return (
     <aside
@@ -145,68 +253,46 @@ export default function Sidebar({ folders, activeId, onSelect, collapsed, onTogg
 
       <nav className="flex-1 overflow-y-auto py-1 scrollbar-thin">
         {!collapsed && sectionHeader('HOME')}
-        {folders.map((folder) => {
-          const isActive = folder.id === activeId
-          const isSaved = folder.type === 'saved'
-          const isDragOver = dragOverId === folder.id
-          const icon = isSaved ? '💾' : '📁'
-          return (
-            <button
-              key={folder.id}
-              onClick={() => onSelect(folder)}
-              onContextMenu={(e) => handleContextMenu(e, folder)}
-              onDragEnter={(e) => { e.preventDefault(); setDragOverId(folder.id); startDragHoverTimer(folder) }}
-              onDragLeave={(e) => {
-                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                  setDragOverId(prev => prev === folder.id ? null : prev)
-                  clearDragHoverTimer()
-                }
-              }}
-              onDragOver={(e) => {
-                e.preventDefault()
-                e.dataTransfer.dropEffect = e.ctrlKey ? 'copy' : 'move'
-              }}
-              onDrop={(e) => {
-                e.preventDefault()
-                setDragOverId(null)
-                clearDragHoverTimer()
-                onFileDrop?.(folder, e.ctrlKey)
-              }}
-              title={collapsed ? folder.title : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-sm transition-all duration-150 border-l-2 ${
-                collapsed ? 'justify-center px-0' : ''
-              }`}
-              style={{
-                background: isActive ? 'color-mix(in srgb, var(--color-accent) 10%, transparent)' : isDragOver ? 'color-mix(in srgb, var(--color-accent) 15%, transparent)' : undefined,
-                color: isActive ? 'var(--color-accent)' : isDragOver ? 'var(--color-text)' : 'var(--color-text-tertiary)',
-                borderLeftColor: isActive || isDragOver ? 'var(--color-accent)' : 'transparent',
-              }}
-              onMouseEnter={!isActive && !isDragOver ? (e) => { e.currentTarget.style.color = 'var(--color-text)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--color-accent) 5%, transparent)' } : undefined}
-              onMouseLeave={!isActive && !isDragOver ? (e) => { e.currentTarget.style.color = 'var(--color-text-tertiary)'; e.currentTarget.style.background = '' } : undefined}
-            >
-              <span className="flex-shrink-0 text-base leading-none">{icon}</span>
-              {!collapsed && (
-                <span className="truncate text-left flex-1 min-w-0">{folder.title}</span>
-              )}
-              {!collapsed && folder.unreadCount ? (
-                <span className="text-[10px] rounded-full px-1.5 py-0.5 min-w-4 text-center leading-none"
-                  style={{ background: 'var(--color-accent)', color: '#fff' }}>
-                  {folder.unreadCount > 99 ? '99+' : folder.unreadCount}
-                </span>
-              ) : null}
-            </button>
-          )
-        })}
+        {(
+          () => {
+            const savedFolder = folders.find(f => f.type === 'saved')
+            if (!savedFolder) return null
+            const isActive = activeId === 'saved'
+            return (
+              <button
+                key="saved"
+                onClick={() => onSelect(savedFolder)}
+                className={`w-full flex items-center gap-3 px-3 py-2 text-sm transition-all duration-150 border-l-2 ${
+                  collapsed ? 'justify-center px-0' : ''
+                }`}
+                style={{
+                  background: isActive ? 'color-mix(in srgb, var(--color-accent) 10%, transparent)' : undefined,
+                  color: isActive ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+                  borderLeftColor: isActive ? 'var(--color-accent)' : 'transparent',
+                }}
+                onMouseEnter={!isActive ? (e) => { e.currentTarget.style.color = 'var(--color-text)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--color-accent) 5%, transparent)' } : undefined}
+                onMouseLeave={!isActive ? (e) => { e.currentTarget.style.color = 'var(--color-text-tertiary)'; e.currentTarget.style.background = '' } : undefined}
+              >
+                <span className="flex-shrink-0 text-base leading-none">💾</span>
+                {!collapsed && <span className="truncate text-left flex-1 min-w-0">Saved Messages</span>}
+              </button>
+            )
+          }
+        )()}
+
+        {!collapsed && sectionHeader('FOLDERS')}
+        {roots.map(rootId => renderFolderNode(rootId, 0))}
 
         {!collapsed && (
           <div className="px-3 mt-1">
             {creating ? (
               <div className="flex gap-1">
                 <input
+                  ref={inputRef}
                   type="text"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setCreating(false) }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') { setCreating(false); setCreatingParentId(undefined) } }}
                   placeholder="Folder name"
                   className="flex-1 px-2 py-1.5 text-xs rounded-lg border focus:outline-none"
                   style={{
@@ -231,7 +317,7 @@ export default function Sidebar({ folders, activeId, onSelect, collapsed, onTogg
               </div>
             ) : (
               <button
-                onClick={() => setCreating(true)}
+                onClick={() => { setCreatingParentId(undefined); setCreating(true) }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-lg border border-dashed transition-all"
                 style={{
                   color: 'var(--color-text-tertiary)',
@@ -249,7 +335,7 @@ export default function Sidebar({ folders, activeId, onSelect, collapsed, onTogg
           </div>
         )}
 
-        {!collapsed && folders.length <= 1 && (
+        {!collapsed && roots.length === 0 && (
           <p className="px-3 mt-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>No channels yet</p>
         )}
 

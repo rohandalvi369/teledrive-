@@ -1,13 +1,18 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
+import { isTauri } from '@/lib/backup'
+import { walkDirectoryTauri, walkDirectoryWeb } from '@/lib/upload'
+import type { FolderUploadEntry } from '@/lib/telegram'
 
 interface Props {
   onUploadFiles: (files: File[]) => void
+  onUploadFolder?: (entries: FolderUploadEntry[]) => void
   uploading: boolean
   folderName?: string
 }
 
-export default function UploadZone({ onUploadFiles, uploading, folderName }: Props) {
+export default function UploadZone({ onUploadFiles, onUploadFolder, uploading, folderName }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const folderInputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
   const dragCounter = useRef(0)
 
@@ -15,6 +20,29 @@ export default function UploadZone({ onUploadFiles, uploading, folderName }: Pro
     const files = Array.from(fileList)
     if (files.length > 0) onUploadFiles(files)
   }, [onUploadFiles])
+
+  const handleFolderPick = useCallback(async () => {
+    if (isTauri()) {
+      try {
+        const { open } = await import('@tauri-apps/plugin-dialog')
+        const selected = await open({ directory: true, multiple: false, title: 'Select folder to upload' })
+        if (selected && onUploadFolder) {
+          const entries = await walkDirectoryTauri(selected as string)
+          if (entries.length > 0) onUploadFolder(entries)
+        }
+      } catch {}
+    } else {
+      folderInputRef.current?.click()
+    }
+  }, [onUploadFolder])
+
+  const handleFolderFiles = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0 && onUploadFolder) {
+      const entries = walkDirectoryWeb(e.target.files)
+      if (entries.length > 0) onUploadFolder(entries)
+      e.target.value = ''
+    }
+  }, [onUploadFolder])
 
   useEffect(() => {
     const handleDragOver = (e: DragEvent) => {
@@ -71,6 +99,13 @@ export default function UploadZone({ onUploadFiles, uploading, folderName }: Pro
         className="hidden"
         onChange={(e) => { if (e.target.files) handleFiles(e.target.files) }}
       />
+      <input
+        ref={folderInputRef}
+        type="file"
+        {...{ webkitdirectory: '' }}
+        className="hidden"
+        onChange={handleFolderFiles}
+      />
       <button
         onClick={() => inputRef.current?.click()}
         disabled={uploading}
@@ -83,6 +118,19 @@ export default function UploadZone({ onUploadFiles, uploading, folderName }: Pro
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
         </svg>
         Upload
+      </button>
+      <button
+        onClick={handleFolderPick}
+        disabled={uploading}
+        className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        style={{ background: 'var(--color-accent)' }}
+        onMouseEnter={(e) => !e.currentTarget.disabled && (e.currentTarget.style.filter = 'brightness(0.9)')}
+        onMouseLeave={(e) => (e.currentTarget.style.filter = '')}
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+        </svg>
+        Upload Folder
       </button>
 
       {dragging && (
